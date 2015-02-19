@@ -184,12 +184,15 @@ scripts:
     data: |
         env
         cd ~/rally/
+        git checkout master
+        sleep 16
         git pull
         git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF
         git checkout FETCH_HEAD
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
+        git config --global user.email "rally-ci@mirantis.com"
+        git config --global user.name "Mirantis Rally CI"
         git rebase master || true
+        git clean -f -x
         git diff --name-only HEAD~1
 
   - name: git_checkout_lxc
@@ -198,14 +201,15 @@ scripts:
         export HOME=/home/rally
         env
         cd /home/rally/rally
-        sleep 10
         git checkout master
+        sleep 16
         git pull
         git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF 
         git checkout FETCH_HEAD
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
+        git config --global user.email "rally-ci@mirantis.com"
+        git config --global user.name "Mirantis Rally CI"
         git rebase master || true
+        git clean -f -x
         git diff --name-only HEAD~1
 
   - name: rebuild_if_requirements
@@ -229,6 +233,19 @@ scripts:
         ip link add link eth1 name vlan$RCI_VLAN type vlan id $RCI_VLAN
         ip addr add $RCI_ADDR dev vlan$RCI_VLAN
         ip link set vlan$RCI_VLAN up
+
+  - name: wait_for_net
+    interpreter: /bin/bash -x -s
+    data: |
+        n=0
+        until [ $n -ge 12 ]
+        do
+            n=$[$n+1]
+            sleep 5
+            ping git.openstack.org -c 1 > /dev/null 2>&1 && exit 0
+        done
+        echo "Timeout waiting for net"
+        exit 255
 
 
   - name: create_and_wait_deployment
@@ -410,8 +427,9 @@ scripts:
       cd /home/rally/rally
       env
       ./tests/ci/rally-gate.py
-      gzip -9 /tmp/pub/* || true
-      ls -lh /tmp/pub || true
+      env
+      ls
+      ls rally-plot
 
   - name: rally_docker
     interpreter: /bin/bash -ex -s
@@ -427,13 +445,27 @@ scripts:
       docker build -t rallyforge/rally .
       sudo /usr/local/bin/push_rally
 
+      git checkout master
+      export RCI_ADD_TAG="1"
+      for tag in `git tag -l`; do
+       echo $tag
+       if ! docker pull rallyforge/rally:$tag; then
+        git checkout tags/$tag
+        docker build -t rallyforge/rally:$tag .
+        sudo /usr/local/bin/push_rally
+       fi
+      done
+      unset RCI_ADD_TAG
+      git checkout master
+
+
 projects:
   - name: stackforge/rally
     job-common-attrs:
       env:
         RCI_TOX_ENV: py27
       environments: ["event_env"]
-      build-scripts: ["git_checkout_lxc", "rebuild_if_requirements"]
+      build-scripts: ["wait_for_net", "git_checkout_lxc", "rebuild_if_requirements"]
 
     jobs:
 
@@ -462,22 +494,16 @@ projects:
           template: ubuntu
           build_scripts: ["install_rally", "install_postgres"]
 
-      - name: tox-ecli-py27-postgres-dsvm
-        voting: false
-        build-scripts: ["git_checkout", "rebuild_if_requirements", "stack.sh"]
+      - name: tox-ecli-py27-postgres
+        voting: true
+        build-scripts: ["wait_for_net", "git_checkout", "rebuild_if_requirements", "stack.sh"]
         test-scripts: ["test_py27"]
         runner: virsh_dsvm_rally
         runner-args:
           user: rally
 
-#      - name: docker-ubuntu-14.10
-#        runner: docker_virsh_50
-#        runner-args:
-#          user: rally
-#        test-scripts: ["rally_docker"]
-
       - name: docker-push
-        build-scripts: ["git_checkout"]
+        build-scripts: ["wait_for_net", "git_checkout"]
         events: ["change-merged"]
         runner: docker_push_virsh_50
         runner-args:
@@ -486,6 +512,7 @@ projects:
 
       - name: mos-5.1.1
         build-scripts:
+          - wait_for_net
           - git_checkout_lxc
           - rebuild_if_requirements
           - vlan
@@ -497,6 +524,7 @@ projects:
           template: ubuntu
           env_networks: ["osall:10.21.1.1/16"]
           build_scripts: ["install_rally", "nat"]
+          pub_dir: /home/rally/rally/rally-plot/
         environments: ["event_env", "mos511_full"]
         test-scripts: ["rally_full"]
 
@@ -508,8 +536,10 @@ projects:
           template: ubuntu
           env_networks: ["osall:172.16.0.1/24"]
           build_scripts: ["install_rally", "nat"]
+          pub_dir: /home/rally/rally/rally-plot/
         environments: ["event_env", "mos6_full"]
         build-scripts:
+          - wait_for_net
           - git_checkout_lxc
           - rebuild_if_requirements
           - vlan
