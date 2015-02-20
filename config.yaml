@@ -192,7 +192,7 @@ scripts:
         git config --global user.email "rally-ci@mirantis.com"
         git config --global user.name "Mirantis Rally CI"
         git rebase master || true
-        git clean -f -x
+        git clean -f -x -e .tox
         git diff --name-only HEAD~1
 
   - name: git_checkout_lxc
@@ -209,7 +209,7 @@ scripts:
         git config --global user.email "rally-ci@mirantis.com"
         git config --global user.name "Mirantis Rally CI"
         git rebase master || true
-        git clean -f -x
+        git clean -f -x -e .tox
         git diff --name-only HEAD~1
 
   - name: rebuild_if_requirements
@@ -355,9 +355,10 @@ scripts:
         export http_proxy http://10.1.1.1:3128/
         apt-get update && apt-get -y install git python-pip
         apt-get -y install python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev
-        apt-get -y install python-subunit
+        apt-get -y install python-subunit libpq-dev python3-dev curl
         pip install tox
         pip install six
+        pip install mako
         unset http_proxy
         
         useradd -m rally
@@ -365,8 +366,7 @@ scripts:
         cd /home/rally
         git clone git://git.openstack.org/stackforge/rally.git
         cd rally
-        tox -epy27 || true
-        tox -epep8 || true
+        tox -epy27 & tox -epep8 & tox -epy26 & tox -e py34
         .tox/pep8/bin/pip install flake8-double-quotes\>\=0.0.1
 
   - name: install_rally_26
@@ -447,9 +447,10 @@ scripts:
 
       git checkout master
       export RCI_ADD_TAG="1"
+      curl https://index.docker.io/v1/repositories/rallyforge/rally/tags 2> /dev/null > /tmp/.rally-tags
       for tag in `git tag -l`; do
        echo $tag
-       if ! docker pull rallyforge/rally:$tag; then
+       if ! grep -c $tag /tmp/.rally-tags; then
         git checkout tags/$tag
         docker build -t rallyforge/rally:$tag .
         sudo /usr/local/bin/push_rally
