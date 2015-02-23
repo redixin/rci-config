@@ -192,8 +192,8 @@ scripts:
         git config --global user.email "rally-ci@mirantis.com"
         git config --global user.name "Mirantis Rally CI"
         git rebase master || true
-        git clean -f -x -e .tox
-        git diff --name-only HEAD~1
+        git clean -fxd -e .tox -e rally.egg-info
+        git diff --name-only master
 
   - name: git_checkout_lxc
     interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
@@ -209,8 +209,8 @@ scripts:
         git config --global user.email "rally-ci@mirantis.com"
         git config --global user.name "Mirantis Rally CI"
         git rebase master || true
-        git clean -f -x -e .tox
-        git diff --name-only HEAD~1
+        git clean -fxd -e .tox -e rally.egg-info
+        git diff --name-only master
 
   - name: rebuild_if_requirements
     interpreter: /usr/bin/sudo -E -u rally /bin/bash -x -s
@@ -218,8 +218,8 @@ scripts:
         export HOME=/home/rally
         cd /home/rally/rally
  
-        UPD=`git diff --name-only HEAD~1 | grep -c "requirements.txt"`
-        if [[ $UPD -eq "1" ]]; then
+        UPD=`git diff --name-only master | grep -c "*requirements.txt"`
+        if [[ $UPD -ne "0" ]]; then
            tox -r -e$RCI_TOX_ENV
         fi
 
