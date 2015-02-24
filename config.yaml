@@ -54,17 +54,6 @@ runners:
       user: root
       port: 16622
 
-  - name: docker_virsh_50
-    module: rallyci.runners.virsh
-    host: ["root", "ci50", 16622]
-    memory: 2097152
-    networks: ["br2"]
-    volumes:
-      - vg: big
-        driver: lvm
-        size: 4G
-        source: "rally-docker-u1410"
-
   - name: docker_push_virsh_50
     module: rallyci.runners.virsh
     host: ["root", "ci50", 16622]
@@ -159,23 +148,6 @@ environments:
         volumes:
           - driver: zfs
             source: "tank/mos6-full-3@1"
-
-  - name: ds-nova
-    module: rallyci.environments.virsh
-    max_threads: 24
-    post-build:
-      - method: run_script
-        args: ["deploy_devstack"]
-    create-vms:
-      - volumes:
-          - driver: lvm
-            size: 8G
-            source: "node-bare-u14"
-            vg: big
-        networks: ["br2"]
-        ip_env_var: VM_IP
-        memory: 2097152
-        host: ["root", "ci50", 16622]
 
 scripts:
 
