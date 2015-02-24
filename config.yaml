@@ -218,7 +218,7 @@ scripts:
         export HOME=/home/rally
         cd /home/rally/rally
  
-        UPD=`git diff --name-only master | grep -c "*requirements.txt"`
+        UPD=`git diff --name-only master | grep -c "requirements.txt"`
         if [[ $UPD -ne "0" ]]; then
            tox -r -e$RCI_TOX_ENV
         fi
