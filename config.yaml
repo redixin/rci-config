@@ -10,7 +10,8 @@ stream:
 
 publishers:
   - module: rallyci.publishers.fancynginx
-    dir: /var/www/rally-ci/logs/
+    dir: /store/www/rally-ci/logs/
+    log-dir: logs/ci
     header-filename: .head.html
     header-template: templates/ps.html
     job-template: templates/job.html
@@ -40,8 +41,6 @@ runners:
 
   - name: lxc_ci49
     module: rallyci.runners.lxc
-    networking:
-      - bridge: br1
     ssh:
       host: ci49
       user: root
@@ -56,22 +55,41 @@ runners:
 
   - name: docker_push_virsh_50
     module: rallyci.runners.virsh
-    host: ["root", "ci50", 16622]
+    ssh:
+      user: root
+      host: ci50
+      port: 16622
     memory: 2097152
     networks: ["br0"]
     volumes:
       - driver: zfs
         source: "tank/u1404@rally_docker"
 
-  - name: virsh_dsvm_rally
+  - name: virsh_dsvm_rally_50
     module: rallyci.runners.virsh
-    host: ["root", "ci50", 16622]
     memory: 4297152
     networks: ["br0"]
     volumes:
-      - driver: zfs
-        source: "tank/u1404_dsvm@1"
+      - driver: zfsf
+        dataset: "tank/qcow"
+        source: "u1404_dsvm@prepared1"
+    ssh:
+      host: ci50
+      user: root
+      port: 16622
 
+  - name: virsh_dsvm_rally_49
+    module: rallyci.runners.virsh
+    memory: 4297152
+    networks: ["br1"]
+    volumes:
+      - driver: zfsf
+        dataset: "tank/qcow"
+        source: "u1404@2"
+    ssh:
+      host: ci49
+      user: root
+      port: 16622
 
 environments:
   - name: event_env
@@ -95,32 +113,41 @@ environments:
 
       - memory: 2097152
         networks: ["osall% 52:54:00:e4:05:00"]
-        host: ["root", "ci50", 16622]
+        ssh:
+          user: root
+          host: ci50
+          port: 16622
         volumes:
           - driver: zfs
-            source: "tank/mos511-1@1"
+            source: "tank/mos511-1@2"
 
       - memory: 4096000
         networks: ["osall% 52:54:00:e4:05:01"]
-        host: ["root", "ci50", 16622]
+        ssh:
+          user: root
+          host: ci50
+          port: 16622
         volumes:
           - driver: zfs
-            source: "tank/mos511-2@1"
+            source: "tank/mos511-2@2"
 
       - memory: 4096000
         networks: ["osall% 52:54:00:e4:05:02"]
-        host: ["root", "ci50", 16622]
+        ssh:
+          user: root
+          host: ci50
+          port: 16622
         volumes:
           - driver: zfs
-            source: "tank/mos511-3@1"
+            source: "tank/mos511-3@2"
 
 
-  - name: mos6_full
+  - name: mos61
     max_threads: 4
     module: rallyci.environments.virsh
     export:
       RCI_VLAN: 100
-      RCI_ADDR: 172.16.0.1/16
+      RCI_ADDR: 172.16.0.1/24
       RCI_ENDPOINT: "http://172.16.0.2:35357/v2.0/"
       OS_AUTH_URL: "http://172.16.0.2:5000/v2.0/"
       OS_USERNAME: admin
@@ -129,25 +156,37 @@ environments:
     create-vms:
 
       - memory: 2097152
-        networks: ["osall% 52:54:00:e4:05:00"]
-        host: ["root", "ci49", 16622]
+        networks: ["osall% 52:54:00:14:da:01"]
+        ssh:
+          user: root
+          host: ci49
+          port: 16622
         volumes:
-          - driver: zfs
-            source: "tank/mos6-full-1@1"
+          - driver: zfsf
+            dataset: "tank/qcow"
+            source: "mos61-1@2"
 
       - memory: 4192000
-        networks: ["osall% 52:54:00:e4:05:02"]
-        host: ["root", "ci49", 16622]
+        networks: ["osall% 52:54:00:14:da:02"]
+        ssh:
+          user: root
+          host: ci49
+          port: 16622
         volumes:
-          - driver: zfs
-            source: "tank/mos6-full-2@1"
+          - driver: zfsf
+            dataset: "tank/qcow"
+            source: "mos61-2@2"
 
       - memory: 4192000
-        networks: ["osall% 52:54:00:e4:05:03"]
-        host: ["root", "ci49", 16622]
+        networks: ["osall% 52:54:00:14:da:03"]
+        ssh:
+          user: root
+          host: ci49
+          port: 16622
         volumes:
-          - driver: zfs
-            source: "tank/mos6-full-3@1"
+          - driver: zfsf
+            dataset: "tank/qcow"
+            source: "mos61-3@2"
 
 scripts:
 
@@ -157,7 +196,6 @@ scripts:
         env
         cd ~/rally/
         git checkout master
-        sleep 16
         git pull
         git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF
         git checkout FETCH_HEAD
@@ -174,7 +212,6 @@ scripts:
         env
         cd /home/rally/rally
         git checkout master
-        sleep 16
         git pull
         git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF 
         git checkout FETCH_HEAD
@@ -189,11 +226,11 @@ scripts:
     data: |
         export HOME=/home/rally
         cd /home/rally/rally
- 
         UPD=`git diff --name-only master | grep -c "requirements.txt"`
         if [[ $UPD -ne "0" ]]; then
-           tox -r -e$RCI_TOX_ENV
+           tox -r -e$RCI_TOX_ENV &
         fi
+        wait
 
   - name: vlan
     interpreter: /bin/bash -xe -s
@@ -224,7 +261,7 @@ scripts:
     interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
     data: |
         export HOME=/home/rally
-        export PATH=$PATH:$HOME/rally/.tox/py27/bin/
+        export PATH=$PATH:$HOME/rally/.tox/$RCI_TOX_ENV/bin/
         rally-manage db recreate
 
         cat <<EOF > /tmp/conf.json
@@ -244,7 +281,7 @@ scripts:
         rally deployment config
 
         n=0
-        until [ $n -ge 120 ]
+        until [ $n -ge 60 ]
         do
             n=$[$n+1]
             sleep 10
@@ -256,47 +293,98 @@ scripts:
   - name: install_postgres
     interpreter: /bin/bash -x -s
     data: |
-        sleep 15
         env
         ip r
+        apt-get update && apt-get -y --force-yes upgrade
         apt-get -y install postgresql python-psycopg2 libpq-dev
-        sudo -i -u rally /home/rally/rally/.tox/py27/bin/pip install psycopg2
         sudo -i -u postgres createuser -s -d -r -l rally
-        sudo -i -u postgres createdb --owner=rally rally
+        sudo -i -u postgres createdb --owner=rally rally/dsvm
+        # connection=postgresql:///rally?host=/var/run/postgresql
+
+  - name: copy_mos_logs
+    interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
+    data: |
+        mkdir /tmp/mos-logs/
+        for ip in 10.20.0.3 10.20.0.4 10.20.0.5; do
+            mkdir /tmp/mos-logs/$ip
+            sshpass -p r00tme scp -o 'StrictHostKeyChecking no' root@$ip:/var/log/*-all.log /tmp/mos-logs/$ip
+            gzip -9 /tmp/mos-logs/$ip/*
+        done
+        chmod -R a+r /tmp/mos-logs
 
   - name: stack.sh
     interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
     data: |
         export HOME=/home/rally
+
+        repos="\
+        git://git.openstack.org/openstack/cinder.git \
+        git://git.openstack.org/openstack/glance.git \
+        git://git.openstack.org/openstack/heat.git \
+        git://git.openstack.org/openstack/heat-cfntools.git \
+        git://git.openstack.org/openstack/heat-templates.git \
+        git://git.openstack.org/openstack/horizon.git \
+        git://git.openstack.org/openstack/keystone.git \
+        git://git.openstack.org/openstack/nova.git \
+        https://github.com/kanaka/noVNC.git \
+        git://git.openstack.org/openstack/requirements.git"
+        #git://git.openstack.org/openstack/neutron.git \
+        cd /opt/stack
+        for repo in $repos
+        do
+            (
+            if git clone $repo 2> /dev/null
+            then
+               echo "repo cloned"
+            else
+               cd `echo $repo | sed -n  's/.*\/\([a-z\-]*\)\.git$/\1/pi'`
+               git checkout master ; git pull ; cd ..
+               #git remote update; git checkout stable/juno; cd ..
+            fi
+            )&
+        done
+        wait
+
         cd ~/devstack
+        git pull &
+        cat > local.conf <<EOF
+        [[local|localrc]]
+        ADMIN_PASSWORD=admin
+        DATABASE_PASSWORD=admin
+        RABBIT_PASSWORD=admin
+        SERVICE_PASSWORD=admin
+        SERVICE_TOKEN=a862f596-76f3-21e3-b3b2-e716f9080d51
+        disable_service tempest
+        disable_service horizon
+        LOGDIR=/opt/stack/logs
+        EOF
+        wait
+        git checkout stable/juno
         ./stack.sh
 
-  - name: test_py27
-    interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
+  - name: gzip_devstack_logs
+    interpreter: /usr/bin/sudo -E -u rally /bin/bash -x -s
     data: |
-        export HOME=/home/rally
-        export RCI_KEEP_DB=1
-        source ~/devstack/openrc admin admin
-        cd ~/rally
-        .tox/py27/bin/rally deployment create --name DS --fromenv
-        .tox/py27/bin/rally deployment config > /tmp/.rd.json
-        cat /tmp/.rd.json
-        #.tox/py27/bin/python -m unittest discover tests/functional
-        tox -e py27 tests.functional -- --concurrency=1
-        cat /tmp/.rd.json
+        ls -lh /opt/stack/logs/
+        find /opt/stack/logs -type l -delete
+        gzip -9 /opt/stack/logs/*
+        exit 0
+   
 
-  - name: test_py34
+  - name: test_functional
     interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
     data: |
+        env
         export HOME=/home/rally
         export RCI_KEEP_DB=1
+        export PATH=/home/rally/rally/.tox/$RCI_TOX_ENV/bin:$PATH
         source ~/devstack/openrc admin admin
         cd ~/rally
-        .tox/py34/bin/rally deployment create --name DS --fromenv
-        .tox/py34/bin/rally deployment config > /tmp/.rd.json
+        rally deployment create --name DS --fromenv
+        rally deployment config > /tmp/.rd.json
         cat /tmp/.rd.json
-        #.tox/py34/bin/python -m unittest discover tests/functional
-        tox -e py34 tests.functional -- --concurrency=1
+        .tox/$RCI_TOX_ENV/bin/python -m unittest discover tests/functional
+        #tox -e $RCI_TOX_ENV tests.functional -- --concurrency=1
         cat /tmp/.rd.json
 
   - name: nat
@@ -321,13 +409,11 @@ scripts:
         env
         ip r
         echo 'Acquire::http::Proxy "http://10.1.1.1:3128";' > /etc/apt/apt.conf.d/80proxy
-        sleep 10
-        ip r
-
         export http_proxy http://10.1.1.1:3128/
-        apt-get update && apt-get -y install git python-pip
-        apt-get -y install python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev
-        apt-get -y install python-subunit libpq-dev python3-dev curl
+        apt-get update && apt-get -y --force-yes upgrade
+        apt-get -y --force-yes install git python-pip sshpass python-yaml
+        apt-get -y --force-yes install python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev
+        apt-get -y --force-yes install python-subunit libpq-dev python3-dev curl
         pip install tox
         pip install six
         pip install mako
@@ -339,7 +425,7 @@ scripts:
         git clone git://git.openstack.org/stackforge/rally.git
         cd rally
         tox -epy27 & tox -epep8 & tox -epy26 & tox -e py34
-        .tox/pep8/bin/pip install flake8-double-quotes\>\=0.0.1
+        #.tox/pep8/bin/pip install flake8-double-quotes\>\=0.0.1
 
   - name: install_rally_26
     interpreter: /bin/bash -x -s
@@ -347,11 +433,10 @@ scripts:
         env
         ip r
         echo 'Acquire::http::Proxy "http://10.1.1.1:3128";' > /etc/apt/apt.conf.d/80proxy
-        sleep 15
-        ip r
 
         export http_proxy http://10.1.1.1:3128/
-        apt-get update && apt-get -y install git python-pip
+        apt-get update && apt-get -y --force-yes upgrade
+        apt-get -y install git python-pip python-yaml
         apt-get -y install software-properties-common python-software-properties
         yes | add-apt-repository ppa:fkrull/deadsnakes
         apt-get update
@@ -373,31 +458,20 @@ scripts:
       env
       export HOME="/home/rally"
       export RCI_TESTS=${RCI_TESTS:-"tests.unit"}
-      export RCI_TOX_ENV=${RCI_TOX_ENV:-"py27"}
       export PATH=$PATH:$HOME/rally/.tox/$RCI_TOX_ENV/bin/
       env
       cd $HOME/rally
       tox -e$RCI_TOX_ENV $RCI_TESTS $RCI_EXTRA
-
-  - name: rally_functional
-    interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
-    data: |
-      export HOME=/home/rally
-      export PATH=$PATH:$HOME/rally/.tox/py27/bin/
-      cd /home/rally/rally
-      env
-      .tox/py27/bin/rally deployment check
-      .tox/py27/bin/python -m subunit.run discover tests/functional > /tmp/tests.subunit
-      .tox/py27/bin/subunit2pyunit < /tmp/tests.subunit
 
   - name: rally_full
     interpreter: /usr/bin/sudo -E -u rally /bin/bash -xe -s
     data: |
       export RALLY_SCENARIO=rally-mos.yaml
       export HOME=/home/rally
-      export PATH=$PATH:$HOME/rally/.tox/py27/bin/
+      export PATH=$PATH:$HOME/rally/.tox/$RCI_TOX_ENV/bin/
       cd /home/rally/rally
       env
+      sleep 30
       ./tests/ci/rally-gate.py
       env
       ls
@@ -442,19 +516,6 @@ projects:
 
     jobs:
 
-      - name: pep8
-        build-scripts: ["git_checkout_lxc"]
-        env:
-          RCI_TOX_ENV: pep8
-          RCI_TESTS: "."
-        voting: true
-        runner: lxc_ci50
-        runner-args:
-          name: rally
-          template: ubuntu
-          build_scripts: ["install_rally", "nat"]
-        test-scripts: ["tox"]
-
       - name: tox-py27-postgres
         env:
           RCI_TOX_ENV: py27
@@ -465,15 +526,33 @@ projects:
         runner-args:
           name: rally-postgres
           template: ubuntu
-          build_scripts: ["install_rally", "install_postgres"]
+          build_scripts: ["wait_for_net", "install_postgres", "install_rally"]
 
-      - name: tox-ecli-py27-postgres
+      - name: tox-ecli-py27-postgres-dsvm
+        env:
+          RCI_TOX_ENV: py27
         voting: true
         build-scripts: ["wait_for_net", "git_checkout", "rebuild_if_requirements", "stack.sh"]
-        test-scripts: ["test_py27"]
-        runner: virsh_dsvm_rally
+        test-scripts: ["test_functional", "gzip_devstack_logs"]
+        runner: virsh_dsvm_rally_50
         runner-args:
           user: rally
+          publish_files:
+            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
+            - ["/opt/stack/logs", "logs/devstack"]
+
+      - name: tox-ecli-py34-postgres-dsvm
+        env:
+          RCI_TOX_ENV: py34
+        voting: true
+        build-scripts: ["wait_for_net", "git_checkout", "rebuild_if_requirements", "stack.sh"]
+        test-scripts: ["test_functional", "gzip_devstack_logs"]
+        runner: virsh_dsvm_rally_50
+        runner-args:
+          user: rally
+          publish_files:
+            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
+            - ["/opt/stack/logs", "logs/devstack"]
 
       - name: docker-push
         build-scripts: ["wait_for_net", "git_checkout"]
@@ -483,38 +562,46 @@ projects:
           user: rally
         scripts: ["rally_docker_push"]
 
-      - name: mos-5.1.1
-        build-scripts:
-          - wait_for_net
-          - git_checkout_lxc
-          - rebuild_if_requirements
-          - vlan
-          - create_and_wait_deployment
-        voting: false
-        runner: lxc_ci50
-        runner-args:
-          name: rally
-          template: ubuntu
-          env_networks: ["osall:10.21.1.1/16"]
-          build_scripts: ["install_rally", "nat"]
-          pub_dir: /home/rally/rally/rally-plot/
-        environments: ["event_env", "mos511_full"]
-        test-scripts: ["rally_full"]
+#      - name: mos-5.1.1
+#        build-scripts:
+#          - wait_for_net
+#          - git_checkout_lxc
+#          - rebuild_if_requirements
+#          - vlan
+#          - create_and_wait_deployment
+#        voting: false
+#        runner: lxc_ci50
+#        runner-args:
+#          name: rally
+#          template: ubuntu
+#          env_networks: ["osall:10.21.1.1/16"]
+#          build_scripts: ["wait_for_net", "install_rally", "nat"]
+#          publish_files:
+#            - ["/home/rally/rally/rally-plot", "rally-plot"]
+#            - ["/tmp/mos-logs", "mos-logs"]
+#        environments: ["event_env", "mos511_full"]
+#        test-scripts: ["rally_full", "copy_mos_logs"]
 
-      - name: mos-6.0
+      - name: mos-6.1-161
+        env:
+          RCI_TOX_ENV: py27
+          RALLY_MANIFEST: "rally-jobs/manifest-mos.yaml"
         voting: false
         runner: lxc_ci49
         runner-args:
           name: rally
           template: ubuntu
           env_networks: ["osall:172.16.0.1/24"]
-          build_scripts: ["install_rally", "nat"]
-          pub_dir: /home/rally/rally/rally-plot/
-        environments: ["event_env", "mos6_full"]
+          build_scripts: ["wait_for_net", "install_rally", "nat"]
+          publish_files:
+            - ["/home/rally/rally/rally-plot", ""]
+            - ["/home/rally/rally/rally-plot/extra/index.html", ""]
+            - ["/tmp/mos-logs", "logs"]
+        environments: ["event_env", "mos61"]
         build-scripts:
           - wait_for_net
           - git_checkout_lxc
           - rebuild_if_requirements
           - vlan
           - create_and_wait_deployment
-        test-scripts: ["rally_full"]
+        test-scripts: ["rally_full", "copy_mos_logs"]
