@@ -359,7 +359,7 @@ scripts:
         LOGDIR=/opt/stack/logs
         EOF
         wait
-        git checkout stable/juno
+        #git checkout stable/juno
         ./stack.sh
 
   - name: gzip_devstack_logs
@@ -422,7 +422,7 @@ scripts:
         useradd -m rally
         su rally
         cd /home/rally
-        git clone git://git.openstack.org/stackforge/rally.git
+        git clone git://git.openstack.org/openstack/rally.git
         cd rally
         tox -epy27 & tox -epep8 & tox -epy26 & tox -e py34
         #.tox/pep8/bin/pip install flake8-double-quotes\>\=0.0.1
@@ -448,7 +448,7 @@ scripts:
         useradd -m rally
         su rally
         cd /home/rally
-        git clone git://git.openstack.org/stackforge/rally.git
+        git clone git://git.openstack.org/openstack/rally.git
         cd rally
         tox -epy26 || true
 
@@ -507,7 +507,7 @@ scripts:
 
 
 projects:
-  - name: stackforge/rally
+  - name: openstack/rally
     job-common-attrs:
       env:
         RCI_TOX_ENV: py27
