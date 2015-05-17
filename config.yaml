@@ -113,7 +113,7 @@ scripts:
       pip install -r /tmp/gr.txt &
       #
       useradd -u 65510 -m rally || true
-      sudo -i -u rally git config --global user.email "rally-ci@mirantis.com" #FIXME
+      sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
       sudo -i -u rally git config --global user.name "Mirantis Rally CI"
       echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
       mkdir -p /home/rally/.ssh
