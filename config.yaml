@@ -50,6 +50,13 @@ runners:
     module: rallyci.runners.virsh
     nodepool: ci4950
     vms:
+      u1404-docker:
+        memory: 2048
+        build-scripts: ["init_u1404", "clone_projects", "install_docker"]
+        dataset: tank/qcow
+        source: bare_u1404@2
+        net:
+          - bridge: "br5"
       dsvm-rally:
         memory: 4096
         build-scripts: ["init_ubuntu", "devstack_checkout"]
@@ -69,6 +76,41 @@ runners:
 
 scripts:
 
+  init_u1404:
+    interpreter: /bin/bash -xe -s
+    data: |
+      apt-get update && apt-get --force-yes -y upgrade
+      apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev
+      useradd -u 65510 -m rally || true
+      sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
+      sudo -i -u rally git config --global user.name "Mirantis Rally CI"
+      echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
+      mkdir -p /home/rally/.ssh
+      cat /root/.ssh/authorized_keys >> /home/rally/.ssh/authorized_keys
+
+  clone_projects:
+    interpreter: /bin/bash -xe -s
+    user: rally
+    data: |
+      sudo mkdir -p /var/repos /opt/stack
+      sudo chown rally /var/repos /opt/stack
+      cd /var/repos
+      projects="\
+      openstack/rally \
+      openstack/glance \
+      openstack/cinder \
+      openstack-dev/devstack"
+      for proj in $projects; do
+        org=$(echo $proj | cut -d '/' -f 1)
+        p=$(echo $proj | cut -d '/' -f 2)
+        mkdir -p $org
+        cd $org
+        git clone "git://git.openstack.org/$proj.git" &
+        ln -s /var/repos/$proj /opt/stack/$p
+        cd ..
+      done
+      wait
+
   git_checkout:
     user: rally
     interpreter: /bin/bash -xe -s
@@ -78,6 +120,34 @@ scripts:
       git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF
       git checkout FETCH_HEAD && git rebase master || true
       git diff --name-only master
+
+  git_checkout_:
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      cd /var/repos
+      cd $GERRIT_PROJECT && git checkout master && git pull
+      git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF
+      git checkout FETCH_HEAD && git rebase master
+      git diff --name-only master
+
+  rally_docker_build_and_check:
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      cd /var/repos
+      cd $GERRIT_PROJECT
+      docker build -t rallyforge/rally .
+      mkdir /tmp/rv
+      sudo chown 65500 /tmp/rv
+      docker run -v /tmp/rv:/home/rally rallyforge/rally rally-manage db recreate
+      docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment list
+
+  install_docker:
+    interpreter: /bin/bash -xe -s
+    data: |
+      apt-get --force-yes -y install docker.io
+      usermod -a -G docker rally || true
 
   devstack_checkout:
     interpreter: /bin/bash -xe -s
@@ -114,21 +184,20 @@ scripts:
     interpreter: /bin/bash -xe -s
     data: |
       apt-get update && apt-get --force-yes -y upgrade
-      apt-get --force-yes -y install git python2.7 bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev
-      #
-      apt-get --force-yes -y install python3-dev
+      apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev
       #
       apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 &
       #
       wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
       python3 /tmp/gp.py #this should be done before pip for python2
       python /tmp/gp.py
-      python3 -m pip install -r /home/rally/openstack/rally/requirements.txt -r /home/rally/openstack/rally/optional-requirements.txt &
+      python3 -m pip install -r /home/rally/openstack/rally/requirements.txt -r /home/rally/openstack/rally/optional-requirements.txt /home/rally/openstack/rally/test-requirements.txt &
       #
       wget -q -O - https://raw.githubusercontent.com/openstack/requirements/master/global-requirements.txt | egrep -v 'marconiclient|pyngus' > /tmp/gr.txt
       python2 -m pip install -r /tmp/gr.txt &
       #
       useradd -u 65510 -m rally || true
+      usermod -a -G docker rally || true
       sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
       sudo -i -u rally git config --global user.name "Mirantis Rally CI"
       echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
@@ -343,6 +412,17 @@ jobs:
             - rally_functional
             - gzip_ds_logs
 
+  docker-check:
+    envs:
+      - name: event
+    runner:
+      name: virsh
+      vms:
+        - vm: u1404-docker
+          scripts:
+            - git_checkout_
+            - rally_docker_build_and_check
+
   test:
     envs:
       - name: event
@@ -363,12 +443,12 @@ jobs:
 projects:
   "openstack/rally":
     silent: true
-    non-voting-jobs:
-      - fuel-community-6.0
+    non-voting-jobs: []
+      #- fuel-community-6.0
     jobs:
-      - rally-postgres-py27
-      - rally-postgres-py34
+      - docker-check
+      #- rally-postgres-py27
+      #- rally-postgres-py34
   "openstack-dev/ci-sandbox":
-    silent: true
     jobs:
       - test
