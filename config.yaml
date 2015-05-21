@@ -14,7 +14,7 @@ publisher:
     port: 29418
   header: |
     Build {succeeded} by Mirantis Rally CI
-  job-template: "- {j.name} http://185.8.56.87/{j.log_path}/ : {j.success} in {human_time}{voting}"
+  job-template: "- {j.name} http://185.8.56.87/{j.log_path}/ : {j.success} {voting}"
 
 recheck:
   regexp: ^(rally.?ci )?recheck.*$
@@ -36,7 +36,7 @@ environments:
 nodepools:
   ci4950:
     module: rallyci.nodepools.fair
-    tasks_per_node: 1
+    tasks_per_node: 8
     nodes:
       - hostname: 10.1.1.1
         username: root
@@ -45,34 +45,6 @@ nodepools:
         username: root
         port: 16622
 
-runners:
-  virsh:
-    module: rallyci.runners.virsh
-    nodepool: ci4950
-    vms:
-      u1404-docker:
-        memory: 2048
-        build-scripts: ["init_u1404", "clone_projects", "install_docker"]
-        dataset: tank/qcow
-        source: bare_u1404@2
-        net:
-          - bridge: "br5"
-      dsvm-rally:
-        memory: 4096
-        build-scripts: ["init_ubuntu", "devstack_checkout"]
-        dataset: tank/qcow
-        source: bare_u1404@2
-        net:
-          - bridge: "br5"
-          - dynamic-bridge: "fuel_br"
-      fuel-community-6.0:
-        memory: 4096
-        dataset: tank/qcow
-        source: fuel-community-6.0@1
-        no_ip: true
-        net:
-          - dynamic-bridge: "fuel_br"
-            mac: "52:54:00:c2:56:67"
 
 scripts:
 
@@ -80,13 +52,20 @@ scripts:
     interpreter: /bin/bash -xe -s
     data: |
       apt-get update && apt-get --force-yes -y upgrade
-      apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev
+      apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass
+      #
+      wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
+      python3 /tmp/gp.py
+      python /tmp/gp.py &
+      #
       useradd -u 65510 -m rally || true
+      sudo -u rally ln -s /var/repos/openstack/rally /home/rally/rally || true
       sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
       sudo -i -u rally git config --global user.name "Mirantis Rally CI"
       echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
       mkdir -p /home/rally/.ssh
       cat /root/.ssh/authorized_keys >> /home/rally/.ssh/authorized_keys
+      wait
 
   clone_projects:
     interpreter: /bin/bash -xe -s
@@ -96,9 +75,16 @@ scripts:
       sudo chown rally /var/repos /opt/stack
       cd /var/repos
       projects="\
-      openstack/rally \
-      openstack/glance \
       openstack/cinder \
+      openstack/glance \
+      openstack/nova \
+      openstack/heat \
+      openstack/heat-cfntools \
+      openstack/heat-templates \
+      openstack/keystone \
+      openstack/neutron \
+      openstack/requirements \
+      openstack-dev/ci-sandbox \
       openstack-dev/devstack"
       for proj in $projects; do
         org=$(echo $proj | cut -d '/' -f 1)
@@ -106,22 +92,26 @@ scripts:
         mkdir -p $org
         cd $org
         git clone "git://git.openstack.org/$proj.git" &
+        sleep 1
         ln -s /var/repos/$proj /opt/stack/$p
         cd ..
       done
+      cd /var/repos/openstack
+      git clone git://git.openstack.org/openstack/rally.git
+      cd rally
+      sudo python3 -m pip install -r requirements.txt -r optional-requirements.txt -r test-requirements.txt
+      wait
+
+  install_deps:
+    interpreter: /bin/bash -xe -s
+    data: |
+      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 &
+      #
+      egrep -v 'marconiclient|pyngus' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
+      python2 -m pip install -r /tmp/gr.txt
       wait
 
   git_checkout:
-    user: rally
-    interpreter: /bin/bash -xe -s
-    data: |
-      env
-      cd $GERRIT_PROJECT && git checkout master && git pull
-      git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF
-      git checkout FETCH_HEAD && git rebase master || true
-      git diff --name-only master
-
-  git_checkout_:
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -149,71 +139,17 @@ scripts:
       apt-get --force-yes -y install docker.io
       usermod -a -G docker rally || true
 
-  devstack_checkout:
+  update_devstack:
     interpreter: /bin/bash -xe -s
+    user: rally
     data: |
-      mkdir -p /opt/stack
-      repos="\
-      git://git.openstack.org/openstack/cinder.git \
-      git://git.openstack.org/openstack/glance.git \
-      git://git.openstack.org/openstack/heat.git \
-      git://git.openstack.org/openstack/heat-cfntools.git \
-      git://git.openstack.org/openstack/heat-templates.git \
-      git://git.openstack.org/openstack/horizon.git \
-      git://git.openstack.org/openstack/keystone.git \
-      git://git.openstack.org/openstack/nova.git \
-      https://github.com/kanaka/noVNC.git \
-      git://git.openstack.org/openstack/requirements.git
-      git://git.openstack.org/openstack/neutron.git"
       cd /opt/stack
-      for repo in $repos
-      do  
-          (
-          if git clone $repo 2> /dev/null
-          then
-             echo "repo cloned"
-          else
-             cd `echo $repo | sed -n  's/.*\/\([a-z\-]*\)\.git$/\1/pi'`
-             git checkout master ; git pull ; cd ..
-          fi
-          )&
+      for d in $(ls); do
+        cd $d
+        git pull &
+        cd ..
       done
       wait
-
-  init_ubuntu:
-    interpreter: /bin/bash -xe -s
-    data: |
-      apt-get update && apt-get --force-yes -y upgrade
-      apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev
-      #
-      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 &
-      #
-      wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
-      python3 /tmp/gp.py #this should be done before pip for python2
-      python /tmp/gp.py
-      python3 -m pip install -r /home/rally/openstack/rally/requirements.txt -r /home/rally/openstack/rally/optional-requirements.txt /home/rally/openstack/rally/test-requirements.txt &
-      #
-      wget -q -O - https://raw.githubusercontent.com/openstack/requirements/master/global-requirements.txt | egrep -v 'marconiclient|pyngus' > /tmp/gr.txt
-      python2 -m pip install -r /tmp/gr.txt &
-      #
-      useradd -u 65510 -m rally || true
-      usermod -a -G docker rally || true
-      sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
-      sudo -i -u rally git config --global user.name "Mirantis Rally CI"
-      echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
-      mkdir -p /home/rally/.ssh
-      cat /root/.ssh/authorized_keys >> /home/rally/.ssh/authorized_keys
-      sudo -u rally bash -ex -s <<EOF
-      export HOME=/home/rally
-      cd /home/rally/
-      mkdir openstack && cd openstack
-      git clone git://github.com/openstack/rally.git &
-      cd /home/rally/
-      git clone git://github.com/openstack-dev/devstack.git
-      wait
-      EOF
-      wait
-      #
 
   init_rally_postgres:
     interpreter: /bin/bash -xe -s
@@ -227,11 +163,9 @@ scripts:
   install_rally:
     interpreter: /bin/bash -xe -s
     data: |
-      cd /home/rally/openstack/rally
+      cd /var/repos/openstack/rally
       RCI_PYTHON=${RCI_PYTHON:-python}
-      $RCI_PYTHON -m pip install -r requirements.txt
-      $RCI_PYTHON -m pip install -r test-requirements.txt
-      $RCI_PYTHON -m pip install -r optional-requirements.txt
+      $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt -r optional-requirements.txt
       $RCI_PYTHON setup.py build
       $RCI_PYTHON setup.py install
       mkdir /etc/rally
@@ -242,8 +176,7 @@ scripts:
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
-      ln -s /home/rally/openstack/rally /home/rally/rally #FIXME
-      cd openstack/rally
+      cd rally
       rally deployment list
       env
       ./tests/ci/rally-gate.py
@@ -278,25 +211,25 @@ scripts:
       echo "Timeout waiting for cloud"
       exit 255
 
-  mos_eth1:
+  eth1_up:
     interpreter: /bin/bash -xe -s
     data: |
       ip link set eth1 up
       ip link list
       ip address flush dev eth1
-      RCI_MOS_INT_IP=${RCI_MOS_INT_IP:-10.20.0.2/24}
-      ip address add "$RCI_MOS_INT_IP" dev eth1
+      RCI_IP=${RCI_IP:-10.20.0.2/24}
+      ip address add "$RCI_IP" dev eth1
       if [ -n "$RCI_VLAN" ]; then
-        ip link add link eth1 name "vlan$RCI_MOS_VLAN" type vlan id "$RCI_MOS_VLAN"
-        ip addr add "$RCI_MOS_IP" dev "vlan$RCI_MOS_VLAN"
-        ip link set "vlan$RCI_MOS_VLAN" up
+        ip link add link eth1 name "vlan$RCI_VLAN" type vlan id "$RCI_VLAN"
+        ip addr add "$RCI_VLAN_IP" dev "vlan$RCI_VLAN"
+        ip link set "vlan$RCI_VLAN" up
       fi
 
   stack_sh:
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
-      cd devstack
+      cd /var/repos/openstack-dev/devstack
       git pull
       cat > local.conf <<EOF
       [[local|localrc]]
@@ -317,9 +250,9 @@ scripts:
     interpreter: /bin/bash -xe -s
     data: |
       export RCI_KEEP_DB=1
-      source ~/devstack/openrc admin admin
+      source /var/repos/openstack-dev/devstack/openrc admin admin
       rally deployment create --name DEVSTACK --fromenv
-      cd openstack/rally
+      cd rally
       $RCI_PYTHON -m unittest discover tests/functional
 
   gzip_ds_logs:
@@ -329,12 +262,23 @@ scripts:
       find -type l -delete
       gzip -9 *
 
-  prepare_sandbox:
+  copy_mos_logs:
+    interpreter: /bin/bash -x -s
+    data: |
+      mkdir /tmp/mos-logs/
+      for ip in 10.20.0.3 10.20.0.4 10.20.0.5; do
+          mkdir /tmp/mos-logs/$ip
+          sshpass -p r00tme scp -o 'StrictHostKeyChecking no' root@$ip:/var/log/*-all.log /tmp/mos-logs/$ip
+          gzip -9 /tmp/mos-logs/$ip/*
+      done
+      chmod -R a+r /tmp/mos-logs
+
+  unittests:
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
-      mkdir openstack-dev && cd openstack-dev
-      git clone git://git.openstack.org/openstack-dev/ci-sandbox.git
+      cd /var/repos/$GERRIT_PROJECT
+      $RCI_PYTHON -m unittest discover $RCI_UNITTESTS_DIR
 
   show_git_log:
     user: rally
@@ -343,6 +287,80 @@ scripts:
       cd $GERRIT_PROJECT
       git log
 
+runners:
+  virsh:
+    module: rallyci.runners.virsh
+    nodepool: ci4950
+    images:
+      u1404:
+        dataset: tank/rci
+        source: bare_u1404@1
+        build-scripts: ["init_u1404", "clone_projects"]
+        build-net: "br5"
+      u1404_docker:
+        parent: u1404
+        build-scripts: ["install_docker"]
+        build-net: "br5"
+      u1404_dsvm:
+        parent: u1404
+        build-scripts: ["install_deps"]
+        build-net: "br5"
+    vms:
+      u1404_docker:
+        memory: 1024
+        image: u1404_docker
+        net:
+          - bridge: "br5"
+      u1404_dsvm:
+        memory: 4096
+        image: u1404_dsvm
+        net:
+          - bridge: "br5"
+      u1404_rally_fuel:
+        memory: 1024
+        image: u1404
+        net:
+          - bridge: "br5"
+          - dynamic-bridge: "fuel_br"
+      u1404_rally_mos:
+        memory: 1024
+        image: u1404
+        net:
+          - bridge: "br5"
+          - dynamic-bridge: "mos_br"
+      fuel_community_60:
+        memory: 4096
+        dataset: tank/rci
+        source: fuel-community-6.0@1
+        no_ip: true
+        net:
+          - dynamic-bridge: "fuel_br"
+            mac: "52:54:00:c2:56:67"
+      mos_6_1_161_1:
+        memory: 4096
+        dataset: tank/qcow
+        source: mos61-1@2
+        no_ip: true
+        net:
+          - dynamic-bridge: "mos_br"
+            mac: "52:54:00:14:da:01"
+      mos_6_1_161_2:
+        memory: 4096
+        dataset: tank/qcow
+        source: mos61-2@2
+        no_ip: true
+        net:
+          - dynamic-bridge: "mos_br"
+            mac: "52:54:00:14:da:02"
+      mos_6_1_161_3:
+        memory: 4096
+        dataset: tank/qcow
+        source: mos61-3@2
+        no_ip: true
+        net:
+          - dynamic-bridge: "mos_br"
+            mac: "52:54:00:14:da:03"
+
 jobs:
   fuel-community-6.0:
     envs:
@@ -350,7 +368,7 @@ jobs:
       - name: dummy
         export:
           RALLY_SCENARIO: "fuel"
-          RCI_MOS_INT_IP: "10.20.0.3/24"
+          RCI_IP: "10.20.0.3/24"
           RCI_ENDPOINT: "http://10.20.0.2:35357/v2.0/"
           OS_AUTH_URL: "http://10.20.0.2:5000/v2.0/"
           OS_USERNAME: admin
@@ -359,18 +377,48 @@ jobs:
     runner:
       name: virsh
       vms:
-        - vm: dsvm-rally
+        - name: u1404_rally_fuel
           scp:
             - ["/home/rally/openstack/rally/rally-plot", "rally-plot"]
           scripts:
             - git_checkout
             - install_rally
-            - mos_eth1
+            - eth1_up
             - create_and_wait_deployment
             - rally_gate
-        - vm: fuel-community-6.0
+        - name: fuel_community_60
 
-  rally-postgres-py27:
+  mos-6.1-161:
+    envs:
+      - name: event
+      - name: dummy
+        export:
+          RCI_VLAN: 100
+          RCI_VLAN_IP: 172.16.0.1/24
+          RALLY_SCENARIO: "rally-mos"
+          RALLY_MANIFEST: "rally-jobs/manifest-mos.yaml"
+          RCI_ENDPOINT: "http://172.16.0.2:35357/v2.0/"
+          OS_AUTH_URL: "http://172.16.0.2:5000/v2.0/"
+          OS_USERNAME: admin
+          OS_PASSWORD: admin
+          OS_TENANT_NAME: admin
+    runner:
+      name: virsh
+      vms:
+        - name: mos_6_1_161_1
+        - name: mos_6_1_161_2
+        - name: mos_6_1_161_3
+        - name: u1404_rally_mos
+          scp:
+            - ["/tmp/mos-logs", "mos-logs"]
+          scripts:
+            - git_checkout
+            - install_rally
+            - eth1_up
+            - create_and_wait_deployment
+            - rally_gate
+
+  rally-dsvm-pg-py27-cli:
     envs:
       - name: event
       - name: dummy
@@ -379,19 +427,20 @@ jobs:
     runner:
       name: virsh
       vms:
-        - vm: dsvm-rally
+        - name: u1404_dsvm
           scp:
             - ["/opt/stack/logs", "devstack-logs"]
+            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
           scripts:
             - git_checkout
             - install_rally
-            - devstack_checkout
+            - update_devstack
             - stack_sh
             - init_rally_postgres
             - rally_functional
             - gzip_ds_logs
 
-  rally-postgres-py34:
+  rally-dsvm-pg-py34-cli:
     envs:
       - name: event
       - name: dummy
@@ -400,13 +449,14 @@ jobs:
     runner:
       name: virsh
       vms:
-        - vm: dsvm-rally
+        - name: u1404_dsvm
           scp:
             - ["/opt/stack/logs", "devstack-logs"]
+            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
           scripts:
             - git_checkout
             - install_rally
-            - devstack_checkout
+            - update_devstack
             - stack_sh
             - init_rally_postgres
             - rally_functional
@@ -418,10 +468,29 @@ jobs:
     runner:
       name: virsh
       vms:
-        - vm: u1404-docker
+        - name: u1404_docker
           scripts:
-            - git_checkout_
+            - git_checkout
+            - install_docker
             - rally_docker_build_and_check
+
+  rally-pg-py27-unit:
+    envs:
+      - name: event
+      - name: dummy
+        export:
+          RCI_PYTHON: python2.7
+          RCI_UNITTESTS_DIR: tests/unit
+          RALLY_UNITTEST_DB_URL: "postgresql:///rally?host=/var/run/postgresql"
+    runner:
+      name: virsh
+      vms:
+        - name: u1404_dsvm
+          scripts:
+            - git_checkout
+            - install_rally
+            - init_rally_postgres
+            - unittests
 
   test:
     envs:
@@ -432,23 +501,23 @@ jobs:
     runner:
       name: virsh
       vms:
-        - vm: dsvm-rally
+        - name: dsvm-rally
           scp:
             - ["/home/rally", "test-logs"]
           scripts:
-            - prepare_sandbox
             - git_checkout
             - show_git_log
 
 projects:
   "openstack/rally":
-    silent: true
-    non-voting-jobs: []
-      #- fuel-community-6.0
+    non-voting-jobs:
+      - fuel-community-6.0
+      - mos-6.1-161
+      - rally-pg-py27-unit
+      - rally-dsvm-pg-py27-cli
+      - rally-dsvm-pg-py34-cli
     jobs:
       - docker-check
-      #- rally-postgres-py27
-      #- rally-postgres-py34
   "openstack-dev/ci-sandbox":
     jobs:
       - test
