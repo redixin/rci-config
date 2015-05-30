@@ -13,8 +13,8 @@ publisher:
     hostname: review.openstack.org
     port: 29418
   header: |
-    Build {succeeded} by Mirantis Rally CI
-  job-template: "- {j.name} http://185.8.56.87/{j.log_path}/ : {j.success} {voting}"
+    Build {succeeded} by Mirantis Rally CI. Use "rally-ci recheck" to recheck only rally-ci jobs or "recheck" to recheck all jobs
+  job-template: "- {name} http://185.8.56.87/{log_path}/ : {success} in {time}"
 
 recheck:
   regexp: ^(rally.?ci )?recheck.*$
@@ -36,7 +36,7 @@ environments:
 nodepools:
   ci4950:
     module: rallyci.nodepools.fair
-    tasks_per_node: 8
+    tasks_per_node: 14
     nodes:
       - hostname: 10.1.1.1
         username: root
@@ -59,7 +59,6 @@ scripts:
       python /tmp/gp.py &
       #
       useradd -u 65510 -m rally || true
-      sudo -u rally ln -s /var/repos/openstack/rally /home/rally/rally || true
       sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
       sudo -i -u rally git config --global user.name "Mirantis Rally CI"
       echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
@@ -71,6 +70,7 @@ scripts:
     interpreter: /bin/bash -xe -s
     user: rally
     data: |
+      export http_proxy=http://10.1.1.2:3128/
       sudo mkdir -p /var/repos /opt/stack
       sudo chown rally /var/repos /opt/stack
       cd /var/repos
@@ -91,7 +91,7 @@ scripts:
         p=$(echo $proj | cut -d '/' -f 2)
         mkdir -p $org
         cd $org
-        git clone "git://git.openstack.org/$proj.git" &
+        git clone "http://git.openstack.org/$proj.git" &
         sleep 1
         ln -s /var/repos/$proj /opt/stack/$p
         cd ..
@@ -142,6 +142,7 @@ scripts:
     interpreter: /bin/bash -xe -s
     user: rally
     data: |
+      export http_proxy=http://10.1.1.2:3128/
       cd /opt/stack
       for d in $(ls); do
         cd $d
@@ -192,8 +193,6 @@ scripts:
       {   
           "type": "ExistingCloud",
           "auth_url": "$OS_AUTH_URL",
-          "endpoint_type": "public",
-          "endpoint": "$RCI_ENDPOINT",
           "admin": {
               "username": "$OS_USERNAME",
               "password": "$OS_PASSWORD",
@@ -221,11 +220,18 @@ scripts:
       ip address flush dev eth1
       RCI_IP=${RCI_IP:-10.20.0.2/24}
       ip address add "$RCI_IP" dev eth1
-      if [ -n "$RCI_VLAN" ]; then
-        ip link add link eth1 name "vlan$RCI_VLAN" type vlan id "$RCI_VLAN"
-        ip addr add "$RCI_VLAN_IP" dev "vlan$RCI_VLAN"
-        ip link set "vlan$RCI_VLAN" up
-      fi
+      up_net () {
+        local MOS_PUBLIC_VLAN=$1
+        local MOS_PUBLIC_IP=$2
+        if [ -n "$MOS_PUBLIC_VLAN" ]; then
+          ip link add link eth1 name "vlan$MOS_PUBLIC_VLAN" type vlan id "$MOS_PUBLIC_VLAN"
+          ip addr add "$MOS_PUBLIC_IP" dev "vlan$MOS_PUBLIC_VLAN"
+          ip link set "vlan$MOS_PUBLIC_VLAN" up
+        fi
+      }
+      up_net $MOS_PUBLIC_VLAN $MOS_PUBLIC_IP
+      up_net $MOS_MANAGEMENT_VLAN $MOS_MANAGEMENT_IP
+      up_net $MOS_PRIVATE_VLAN $MOS_PRIVATE_IP
 
   stack_sh:
     user: rally
@@ -288,7 +294,7 @@ scripts:
     user: rally
     interpreter: /bin/bash -x -s
     data: |
-      cd $GERRIT_PROJECT
+      cd /var/repos/$GERRIT_PROJECT
       git log
 
 runners:
@@ -340,30 +346,31 @@ runners:
         net:
           - dynamic-bridge: "fuel_br"
             mac: "52:54:00:c2:56:67"
-      mos_6_1_161_1:
+
+      mos_6_1_462_1:
         memory: 4096
         dataset: tank/qcow
-        source: mos61-1@2
+        source: mos-6.1.462-1@1
         no_ip: true
         net:
           - dynamic-bridge: "mos_br"
-            mac: "52:54:00:14:da:01"
-      mos_6_1_161_2:
+            mac: "52:54:00:4f:3a:bb"
+      mos_6_1_462_2:
         memory: 4096
         dataset: tank/qcow
-        source: mos61-2@2
+        source: mos-6.1.462-2@1
         no_ip: true
         net:
           - dynamic-bridge: "mos_br"
-            mac: "52:54:00:14:da:02"
-      mos_6_1_161_3:
+            mac: "52:54:00:86:13:01"
+      mos_6_1_462_3:
         memory: 4096
         dataset: tank/qcow
-        source: mos61-3@2
+        source: mos-6.1.462-3@1
         no_ip: true
         net:
           - dynamic-bridge: "mos_br"
-            mac: "52:54:00:14:da:03"
+            mac: "52:54:00:5a:7f:9e"
 
 jobs:
   fuel-community-6.0:
@@ -373,7 +380,6 @@ jobs:
         export:
           RALLY_SCENARIO: "fuel"
           RCI_IP: "10.20.0.3/24"
-          RCI_ENDPOINT: "http://10.20.0.2:35357/v2.0/"
           OS_AUTH_URL: "http://10.20.0.2:5000/v2.0/"
           OS_USERNAME: admin
           OS_PASSWORD: admin
@@ -383,7 +389,7 @@ jobs:
       vms:
         - name: u1404_rally_fuel
           scp:
-            - ["/home/rally/openstack/rally/rally-plot", "rally-plot"]
+            - ["/home/rally/rally/rally-plot", "rally-plot"]
           scripts:
             - git_checkout
             - install_rally
@@ -392,16 +398,19 @@ jobs:
             - rally_gate
         - name: fuel_community_60
 
-  mos-6.1-161:
+  mos-6.1-462:
     envs:
       - name: event
       - name: dummy
         export:
-          RCI_VLAN: 100
-          RCI_VLAN_IP: 172.16.0.1/24
+          MOS_PUBLIC_VLAN: 100
+          MOS_MANAGEMENT_VLAN: 101
+          MOS_PRIVATE_VLAN: 103
+          MOS_PUBLIC_IP: 172.16.0.1/24
+          MOS_MANAGEMENT_IP: 192.168.0.1/24
+          MOS_PRIVATE_IP: 192.168.2.1/24
           RALLY_SCENARIO: "rally-mos"
           RALLY_MANIFEST: "rally-jobs/manifest-mos.yaml"
-          RCI_ENDPOINT: "http://172.16.0.2:35357/v2.0/"
           OS_AUTH_URL: "http://172.16.0.2:5000/v2.0/"
           OS_USERNAME: admin
           OS_PASSWORD: admin
@@ -409,18 +418,20 @@ jobs:
     runner:
       name: virsh
       vms:
-        - name: mos_6_1_161_1
-        - name: mos_6_1_161_2
-        - name: mos_6_1_161_3
+        - name: mos_6_1_462_1
+        - name: mos_6_1_462_2
+        - name: mos_6_1_462_3
         - name: u1404_rally_mos
           scp:
             - ["/tmp/mos-logs", "mos-logs"]
+            - ["/home/rally/rally/rally-plot", "rally-plot"]
           scripts:
             - git_checkout
             - install_rally
             - eth1_up
             - create_and_wait_deployment
             - rally_gate
+            - copy_mos_logs
 
   rally-dsvm-pg-py27-cli:
     envs:
@@ -505,7 +516,7 @@ jobs:
     runner:
       name: virsh
       vms:
-        - name: dsvm-rally
+        - name: u1404_dsvm
           scp:
             - ["/home/rally", "test-logs"]
           scripts:
@@ -516,12 +527,12 @@ projects:
   "openstack/rally":
     non-voting-jobs:
       - fuel-community-6.0
-      - mos-6.1-161
+      - mos-6.1-462
+    jobs:
+      - docker-check
       - rally-pg-py27-unit
       - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
-    jobs:
-      - docker-check
   "openstack-dev/ci-sandbox":
     jobs:
       - test

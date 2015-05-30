@@ -1,0 +1,210 @@
+---
+stream:
+  module: rallyci.streams.gerrit
+  username: ci50
+  hostname: review.openstack.org
+  port: 29418
+
+environments:
+  event:
+    module: rallyci.environments.event
+    export-event:
+      GERRIT_PROJECT: change.project
+      GERRIT_REF: patchSet.ref
+  dummy:
+    module: rallyci.environments.dummy
+
+nodepools:
+  local:
+    module: rallyci.nodepools.fair
+    tasks_per_node: 2
+    nodes:
+      - hostname: localhost
+        username: root
+
+recheck:
+  regexp: ^(rally.?ci )?recheck.*$
+
+loggers:
+  file:
+    module: rallyci.loggers.logfile
+    path: /home/rally/jobs-logs/
+
+scripts:
+
+  init_dsvm:
+    interpreter: /bin/bash -xe -s
+    data: |
+      apt-get update && apt-get --force-yes -y upgrade
+      apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass
+      # install devstack apts in background
+      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 &
+      # install pip global requirements in background
+      wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
+      python3 /tmp/gp.py &
+      python2 /tmp/gp.py
+      egrep -v 'marconiclient|pyngus' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
+      python2 -m pip install -r /tmp/gr.txt &
+      # create rally user, setup git globals, generate ssh keys
+      useradd -u 65510 -m rally || true
+      sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
+      sudo -i -u rally git config --global user.name "Mirantis Rally CI"
+      echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
+      mkdir -p /home/rally/.ssh
+      cd /home/rally/.ssh
+      ssh-keygen -N '' -f id_rsa
+      cat /root/.ssh/authorized_keys >> authorized_keys
+      cat id_rsa.pub >> authorized_keys
+      chown -R rally .
+      # clone all required openstack projects
+      mkdir -p /var/repos /opt/stack
+      chown rally /var/repos /opt/stack
+      sudo -E -u rally bash -xe -s <<EOF
+      cd /var/repos
+      projects="\
+      openstack/cinder openstack/glance \
+      openstack/nova \
+      openstack/heat openstack/heat-cfntools openstack/heat-templates \
+      openstack/keystone \
+      openstack/neutron \
+      openstack/requirements \
+      openstack-dev/ci-sandbox \
+      openstack-dev/devstack"
+      for proj in $projects; do
+        org=$(echo $proj | cut -d '/' -f 1)
+        p=$(echo $proj | cut -d '/' -f 2)
+        mkdir -p $org
+        cd $org
+        git clone "http://git.openstack.org/$proj.git" &
+        sleep 1
+        ln -s /var/repos/$proj /opt/stack/$p
+        cd ..
+      done
+      cd /var/repos/openstack
+      git clone git://git.openstack.org/openstack/rally.git
+      ln -s /var/repos/openstack/rally /home/rally/rally
+      wait
+      EOF
+      wait
+
+  git_checkout:
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      cd /var/repos
+      cd $GERRIT_PROJECT && git checkout master && git pull
+      git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF
+      git checkout FETCH_HEAD && git rebase master
+      git diff --name-only master
+
+  update_devstack:
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      cd /opt/stack
+      for d in $(ls); do
+        cd $d
+        git pull &
+        sleep 1
+        cd ..
+      done
+      wait
+
+  stack_sh_master:
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      cd /var/repos/openstack-dev/devstack/
+      cat > local.conf <<EOF
+      [[local|localrc]]
+      HOST_IP=$DSVM_MASTER_IP
+      FLAT_INTERFACE=eth0
+      FIXED_RANGE=10.4.128.0/20
+      FIXED_NETWORK_SIZE=4096
+      FLOATING_RANGE=192.168.42.128/25
+      MULTI_HOST=1
+      FORCE_CONFIG_DRIVE=False
+      LOGFILE=/opt/stack/logs/stack.sh.log
+      LOG_COLOR=False
+      ADMIN_PASSWORD=admin
+      MYSQL_PASSWORD=supersecret
+      RABBIT_PASSWORD=supersecrete
+      SERVICE_PASSWORD=supersecrete
+      SERVICE_TOKEN=xyzpdqlazydog
+      disable_service tempest
+      disable_service horizon
+      EOF
+
+  stack_sh_slave:
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      cd /var/repos/openstack-dev/devstack/
+      cat > local.conf <<EOF
+      [[local|localrc]]
+      HOST_IP=$DSVM_SLAVE_IP
+      FLAT_INTERFACE=eth0
+      FIXED_RANGE=10.4.128.0/20
+      FIXED_NETWORK_SIZE=4096
+      FLOATING_RANGE=192.168.42.128/25
+      MULTI_HOST=1
+      FORCE_CONFIG_DRIVE=False
+      LOGFILE=/opt/stack/logs/stack.sh.log
+      LOG_COLOR=False
+      ADMIN_PASSWORD=admin
+      MYSQL_PASSWORD=supersecret
+      RABBIT_PASSWORD=supersecrete
+      SERVICE_PASSWORD=supersecrete
+      SERVICE_TOKEN=xyzpdqlazydog
+      DATABASE_TYPE=mysql
+      SERVICE_HOST=$DSVM_MASTER_IP
+      MYSQL_HOST=$DSVM_MASTER_IP
+      RABBIT_HOST=$DSVM_MASTER_IP
+      GLANCE_HOSTPORT=$DSVM_MASTER_IP:9292
+      ENABLED_SERVICES=n-cpu,n-net,n-api,c-sch,c-api,c-vol
+      EOF
+
+  setup_libvirt:
+    user: root
+    interpreter: /bin/bash -xe -s
+    data: |
+      apt-get --force-yes -y install libvirt-bin
+      cat > /etc/libvirt/libvirtd.conf <<EOF
+      listen_tls = 0
+      listen_tcp = 1
+      auth_tcp = "none"
+      EOF
+      sed 's|libvirtd_opts.*|libvirtd_opts="-d -l"|' -i /etc/default/libvirt-bin
+      echo 'security_driver="none"' >> /etc/libvirt/qemu.conf
+      service libvirt-bin restart
+
+runners:
+  virsh:
+    module: rallyci.runners.virsh
+    nodepool: localhost
+    images:
+      mh_dsvm:
+        dataset: tank/rci
+        source: bare_u1404@1
+        build-scripts: ["init_dsvm"]
+        build-net: "br5"
+    vms:
+      dsvm:
+        memory: 2048
+        image: mh_dsvm
+        net:
+          - bridge: br5
+
+jobs:
+  dsvm-rally-block-migrate:
+    envs:
+      - name: event
+    runner:
+      name: virsh
+      vms:
+        - name: dsvm
+          ip_env_var: DSVM_SLAVE_IP
+          scripts: ["setup_libvirt", "stack_sh_slave"]
+        - name: dsvm
+          ip_env_var: DSVM_MASTER_IP
+          scripts: ["setup_libvirt", "stack_sh_master", "stack_sh_mh"]
