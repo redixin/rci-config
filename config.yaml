@@ -97,9 +97,8 @@ scripts:
         cd ..
       done
       cd /var/repos/openstack
-      git clone git://git.openstack.org/openstack/rally.git
-      cd rally
-      sudo python3 -m pip install -r requirements.txt -r optional-requirements.txt -r test-requirements.txt
+      git clone http://git.openstack.org/openstack/rally.git
+      ln -s /var/repos/openstack/rally /home/rally/rally
       wait
 
   install_deps:
@@ -150,6 +149,8 @@ scripts:
         cd ..
       done
       wait
+      egrep -v 'marconiclient|pyngus' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
+      sudo -H python2 -m pip install -r /tmp/gr.txt
 
   init_rally_postgres:
     interpreter: /bin/bash -xe -s
@@ -176,6 +177,7 @@ scripts:
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      ${RCI_PYTHON:-python} -m pip freeze
       cd rally
       rally deployment list
       env
@@ -249,6 +251,7 @@ scripts:
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      ${RCI_PYTHON:-python} -m pip freeze
       export RCI_KEEP_DB=1
       source /var/repos/openstack-dev/devstack/openrc admin admin
       rally deployment create --name DEVSTACK --fromenv
@@ -277,6 +280,7 @@ scripts:
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      ${RCI_PYTHON:-python} -m pip freeze
       cd /var/repos/$GERRIT_PROJECT
       $RCI_PYTHON -m unittest discover $RCI_UNITTESTS_DIR
 
@@ -294,7 +298,7 @@ runners:
     images:
       u1404:
         dataset: tank/rci
-        source: bare_u1404@1
+        source: bare_u1404@2
         build-scripts: ["init_u1404", "clone_projects"]
         build-net: "br5"
       u1404_docker:
@@ -433,9 +437,9 @@ jobs:
             - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
           scripts:
             - git_checkout
-            - install_rally
             - update_devstack
             - stack_sh
+            - install_rally
             - init_rally_postgres
             - rally_functional
             - gzip_ds_logs
@@ -455,9 +459,9 @@ jobs:
             - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
           scripts:
             - git_checkout
-            - install_rally
             - update_devstack
             - stack_sh
+            - install_rally
             - init_rally_postgres
             - rally_functional
             - gzip_ds_logs
