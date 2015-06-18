@@ -1,40 +1,39 @@
 ---
-stream:
-  module: rallyci.streams.gerrit
-  username: ci50
-  hostname: review.openstack.org
-  port: 29418
+- stream:
+    name: openstack
+    module: rallyci.streams.gerrit
+    ssh:
+      username: ci50
+      hostname: review.openstack.org
+    vote: true
+    comment-header: |
+      Build {succeeded} by RallyCI. Use "my-ci recheck" to recheck
+    comment-job-template: "- {name} http://185.8.56.88/{log_path}/ : {success} in {time}"
+    recheck-regexp: ^rally-ci recheck$
 
-publisher:
-  module: rallyci.publishers.gerrit
-  vote: true
-  ssh:
-    username: ci50
-    hostname: review.openstack.org
-    port: 29418
-  header: |
-    Build {succeeded} by Mirantis Rally CI. Use "rally-ci recheck" to recheck only rally-ci jobs or "recheck" to recheck all jobs
-  job-template: "- {name} http://185.8.56.87/{log_path}/ : {success} in {time}"
+- status:
+    name: main
+    module: rallyci.status.http
+    listen: [0.0.0.0, 8080]
 
-recheck:
-  regexp: ^(rally.?ci )?recheck.*$
-
-loggers:
-  file:
+- logger:
+    name: main
     module: rallyci.loggers.logfile
-    path: /home/rally/jobs-logs/
+    path: /store/www/rally-ci/logs/
 
-environments:
-  event:
+- env:
+    name: event
     module: rallyci.environments.event
     export-event:
       GERRIT_PROJECT: change.project
       GERRIT_REF: patchSet.ref
-  dummy:
+
+- env:
+    name: dummy
     module: rallyci.environments.dummy
 
-nodepools:
-  ci4950:
+- nodepool:
+    name: ci4950
     module: rallyci.nodepools.fair
     tasks_per_node: 14
     nodes:
@@ -45,10 +44,8 @@ nodepools:
         username: root
         port: 16622
 
-
-scripts:
-
-  init_u1404:
+- script:
+    name: init_u1404
     interpreter: /bin/bash -xe -s
     data: |
       apt-get update && apt-get --force-yes -y upgrade
@@ -66,7 +63,8 @@ scripts:
       cat /root/.ssh/authorized_keys >> /home/rally/.ssh/authorized_keys
       wait
 
-  clone_projects:
+- script:
+    name: clone_projects
     interpreter: /bin/bash -xe -s
     user: rally
     data: |
@@ -101,7 +99,8 @@ scripts:
       ln -s /var/repos/openstack/rally /home/rally/rally
       wait
 
-  install_deps:
+- script:
+    name: install_deps
     interpreter: /bin/bash -xe -s
     data: |
       apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 &
@@ -110,7 +109,8 @@ scripts:
       python2 -m pip install -r /tmp/gr.txt
       wait
 
-  git_checkout:
+- script:
+    name: git_checkout
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -120,7 +120,8 @@ scripts:
       git checkout FETCH_HEAD && git rebase master
       git diff --name-only master
 
-  rally_docker_build_and_check:
+- script:
+    name: rally_docker_build_and_check
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -132,13 +133,15 @@ scripts:
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally-manage db recreate
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment list
 
-  install_docker:
+- script:
+    name: install_docker
     interpreter: /bin/bash -xe -s
     data: |
       apt-get --force-yes -y install docker.io
       usermod -a -G docker rally || true
 
-  update_devstack:
+- script:
+    name: update_devstack
     interpreter: /bin/bash -xe -s
     user: rally
     data: |
@@ -153,7 +156,8 @@ scripts:
       egrep -v 'marconiclient|pyngus' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
       sudo -H python2 -m pip install -r /tmp/gr.txt
 
-  init_rally_postgres:
+- script:
+    name: init_rally_postgres
     interpreter: /bin/bash -xe -s
     data: |
       apt-get --force-yes -y install postgresql
@@ -162,7 +166,8 @@ scripts:
       sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
       sudo -u rally rally-manage db recreate
 
-  install_rally:
+- script:
+    name: install_rally
     interpreter: /bin/bash -xe -s
     data: |
       cd /var/repos/openstack/rally
@@ -174,7 +179,8 @@ scripts:
       cp etc/rally/rally.conf.sample /etc/rally/rally.conf
       sudo -u rally rally-manage db recreate
 
-  rally_gate:
+- script:
+    name: rally_gate
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -184,7 +190,8 @@ scripts:
       env
       ./tests/ci/rally-gate.py
 
-  create_and_wait_deployment:
+- script:
+    name: create_and_wait_deployment
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -212,7 +219,8 @@ scripts:
       echo "Timeout waiting for cloud"
       exit 255
 
-  eth1_up:
+- script:
+    name: eth1_up
     interpreter: /bin/bash -xe -s
     data: |
       ip link set eth1 up
@@ -233,7 +241,8 @@ scripts:
       up_net $MOS_MANAGEMENT_VLAN $MOS_MANAGEMENT_IP
       up_net $MOS_PRIVATE_VLAN $MOS_PRIVATE_IP
 
-  stack_sh:
+- script:
+    name: stack_sh
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -253,7 +262,8 @@ scripts:
       EOF
       ./stack.sh
 
-  rally_functional:
+- script:
+    name: rally_functional
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -264,14 +274,16 @@ scripts:
       cd rally
       $RCI_PYTHON -m unittest discover tests/functional
 
-  gzip_ds_logs:
+- script:
+    name: gzip_ds_logs
     interpreter: /bin/bash -x -s
     data: |
       cd /opt/stack/logs
       find -type l -delete
       gzip -9 *
 
-  copy_mos_logs:
+- script:
+    name: copy_mos_logs
     interpreter: /bin/bash -x -s
     data: |
       mkdir /tmp/mos-logs/
@@ -282,7 +294,8 @@ scripts:
       done
       chmod -R a+r /tmp/mos-logs
 
-  unittests:
+- script:
+    name: unittests
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -290,16 +303,18 @@ scripts:
       cd /var/repos/$GERRIT_PROJECT
       $RCI_PYTHON -m unittest discover $RCI_UNITTESTS_DIR
 
-  show_git_log:
+- script:
+    name: show_git_log
     user: rally
     interpreter: /bin/bash -x -s
     data: |
       cd /var/repos/$GERRIT_PROJECT
       git log
 
-runners:
-  virsh:
+- runner:
+    name: virsh
     module: rallyci.runners.virsh
+    scp-root: /store/www/rally-ci/logs/
     nodepool: ci4950
     images:
       u1404:
@@ -372,8 +387,8 @@ runners:
           - dynamic-bridge: "mos_br"
             mac: "52:54:00:5a:7f:9e"
 
-jobs:
-  fuel-community-6.0:
+- job:
+    name: fuel-community-6.0
     envs:
       - name: event
       - name: dummy
@@ -398,7 +413,8 @@ jobs:
             - rally_gate
         - name: fuel_community_60
 
-  mos-6.1-462:
+- job:
+    name: mos-6.1-462
     envs:
       - name: event
       - name: dummy
@@ -433,7 +449,8 @@ jobs:
             - rally_gate
             - copy_mos_logs
 
-  rally-dsvm-pg-py27-cli:
+- job:
+    name: rally-dsvm-pg-py27-cli
     envs:
       - name: event
       - name: dummy
@@ -455,7 +472,8 @@ jobs:
             - rally_functional
             - gzip_ds_logs
 
-  rally-dsvm-pg-py34-cli:
+- job:
+    name: rally-dsvm-pg-py34-cli
     envs:
       - name: event
       - name: dummy
@@ -477,7 +495,8 @@ jobs:
             - rally_functional
             - gzip_ds_logs
 
-  docker-check:
+- job:
+    name: docker-check
     envs:
       - name: event
     runner:
@@ -489,7 +508,8 @@ jobs:
             - install_docker
             - rally_docker_build_and_check
 
-  rally-pg-py27-unit:
+- job:
+    name: rally-pg-py27-unit
     envs:
       - name: event
       - name: dummy
@@ -507,7 +527,8 @@ jobs:
             - init_rally_postgres
             - unittests
 
-  test:
+- job:
+    name: test
     envs:
       - name: event
       - name: dummy
@@ -523,8 +544,13 @@ jobs:
             - git_checkout
             - show_git_log
 
-projects:
-  "openstack/rally":
+- project:
+    name: openstack-dev/ci-sandbox
+    jobs:
+      - test
+
+- project:
+    name: openstack/rally
     non-voting-jobs:
       - fuel-community-6.0
       - mos-6.1-462
@@ -533,6 +559,3 @@ projects:
       - rally-pg-py27-unit
       - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
-  "openstack-dev/ci-sandbox":
-    jobs:
-      - test
