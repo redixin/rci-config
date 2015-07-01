@@ -8,10 +8,16 @@
       key: /etc/rally-ci/rally-ci
       hostname: review.openstack.org
     vote: false
+    silent: true
     comment-header: |
       Build {succeeded} by RallyCI. Use "rally-ci recheck" to recheck
     comment-job-template: "- {name} http://185.8.56.88/{log_path}/ : {success} in {time}"
     recheck-regexp: ^rally-ci recheck$
+    # This section contains all settings related to gerrit.
+    # NOTE: There can be as many stream sections as you need.
+    #
+    # vote: true/false # either add +1/-1 or not
+    # silent: true/false # silent mode (no gerrit coments at all)
 
 - env:
     name: event
@@ -19,10 +25,12 @@
     export-event:
       GERRIT_PROJECT: change.project
       GERRIT_REF: patchSet.ref
+    # this env will export some data from gerrit event to our bash scripts (see below)
 
 - env:
     name: dummy
     module: rallyci.environments.dummy
+    # just dummy env which exports env variable (see below)
 
 - nodepool:
     name: local
@@ -31,12 +39,13 @@
     nodes:
       - hostname: localhost
         username: root
+    # this nodepool contain list of nodes which are used serve runners (see below)
 
 - logger:
     name: main
     module: rallyci.loggers.logfile
     path: /store/rally-ci/logs/
-
+    # all scripts output (stdout and stderr) will be stored in /store/rally-ci/logs
 
 - script:
     name: init_dsvm
@@ -119,6 +128,7 @@
       git fetch https://review.openstack.org/$GERRIT_PROJECT $GERRIT_REF
       git checkout FETCH_HEAD && git rebase master
       git diff --name-only master
+    # environment variables from "event" env are used here ^
 
 - script:
     name: stack_sh_master
@@ -208,6 +218,7 @@
             "image": {"name": "^cirros.*uec$"},
             "block_migration": true
          },
+         "sla": {"failure_rate": {"max": 0}},
          "runner": {"type": "constant", "times": 1, "concurrency": 1},
          "context": {"users": {"tenants": 1, "users_per_tenant": 1 }}}]
       }
