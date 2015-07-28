@@ -7,7 +7,9 @@
       hostname: review.openstack.org
     vote: true
     comment-header: |
-      Build {succeeded} by RallyCI. Use "my-ci recheck" to recheck
+      Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
+      
+      See status at: http://185.8.56.88/
     comment-job-template: "- {name} http://185.8.56.88/{log_path}/ : {success} in {time}"
     recheck-regexp: ^rally-ci recheck$
 
@@ -50,6 +52,8 @@
     data: |
       apt-get update && apt-get --force-yes -y upgrade
       apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass
+      echo 'export http_proxy=http://10.1.1.2:3128/' > /etc/profile.d/15-proxy.sh
+      . /etc/profile.d/15-proxy.sh
       #
       wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
       python3 /tmp/gp.py
@@ -68,7 +72,7 @@
     interpreter: /bin/bash -xe -s
     user: rally
     data: |
-      export http_proxy=http://10.1.1.2:3128/
+      env
       sudo mkdir -p /var/repos /opt/stack
       sudo chown rally /var/repos /opt/stack
       cd /var/repos
@@ -145,7 +149,6 @@
     interpreter: /bin/bash -xe -s
     user: rally
     data: |
-      export http_proxy=http://10.1.1.2:3128/
       cd /opt/stack
       for d in $(ls); do
         cd $d
@@ -160,6 +163,7 @@
     name: init_rally_postgres
     interpreter: /bin/bash -xe -s
     data: |
+      apt-get --force-yes -y update
       apt-get --force-yes -y install postgresql
       sudo -i -u postgres createuser -s -d -r -l rally
       sudo -i -u postgres createdb --owner=rally rally
@@ -362,30 +366,30 @@
           - dynamic-bridge: "fuel_br"
             mac: "52:54:00:c2:56:67"
 
-      mos_6_1_462_1:
+      mos_6_1_1:
         memory: 4096
         dataset: tank/qcow
-        source: mos-6.1.462-1@1
+        source: mos-6.1-1@1
         no_ip: true
         net:
           - dynamic-bridge: "mos_br"
-            mac: "52:54:00:4f:3a:bb"
-      mos_6_1_462_2:
+            mac: "52:54:00:fa:11:01"
+      mos_6_1_2:
         memory: 4096
         dataset: tank/qcow
-        source: mos-6.1.462-2@1
+        source: mos-6.1-2@1
         no_ip: true
         net:
           - dynamic-bridge: "mos_br"
-            mac: "52:54:00:86:13:01"
-      mos_6_1_462_3:
+            mac: "52:54:00:fa:11:02"
+      mos_6_1_3:
         memory: 4096
         dataset: tank/qcow
-        source: mos-6.1.462-3@1
+        source: mos-6.1-3@1
         no_ip: true
         net:
           - dynamic-bridge: "mos_br"
-            mac: "52:54:00:5a:7f:9e"
+            mac: "52:54:00:fa:11:03"
 
 - job:
     name: fuel-community-6.0
@@ -414,13 +418,13 @@
         - name: fuel_community_60
 
 - job:
-    name: mos-6.1-462
+    name: mos-6.1
     envs:
       - name: event
       - name: dummy
         export:
           MOS_PUBLIC_VLAN: 100
-          MOS_MANAGEMENT_VLAN: 101
+          MOS_MANAGEMENT_VLAN: 102
           MOS_PRIVATE_VLAN: 103
           MOS_PUBLIC_IP: 172.16.0.1/24
           MOS_MANAGEMENT_IP: 192.168.0.1/24
@@ -434,9 +438,9 @@
     runner:
       name: virsh
       vms:
-        - name: mos_6_1_462_1
-        - name: mos_6_1_462_2
-        - name: mos_6_1_462_3
+        - name: mos_6_1_1
+        - name: mos_6_1_2
+        - name: mos_6_1_3
         - name: u1404_rally_mos
           scp:
             - ["/tmp/mos-logs", "mos-logs"]
@@ -552,10 +556,10 @@
 - project:
     name: openstack/rally
     non-voting-jobs:
-      - fuel-community-6.0
-      - mos-6.1-462
+      - rally-dsvm-pg-py27-cli
+      - mos-6.1
     jobs:
       - docker-check
       - rally-pg-py27-unit
-      - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
+      - fuel-community-6.0
