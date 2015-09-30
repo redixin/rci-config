@@ -1,5 +1,10 @@
 ---
 
+- logging:
+    info: /store/rally-ci/rally-ci.info.log
+    error: /store/rally-ci/rally-ci.error.log
+    debug: /store/rally-ci/rally-ci.debug.log
+
 - stream:
     name: openstack
     module: rallyci.streams.gerrit
@@ -7,14 +12,14 @@
       username: ci50
       hostname: review.openstack.org
       key: /home/eye/.ssh/rally
-    vote: false
-    silent: true
+    vote: true
+    silent: false
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
       
       See status at: http://185.8.56.87/
-    comment-job-template: "- {name} http://185.8.56.87/{log_path}/ : {success} in {time}"
-    recheck-regexp: ^my-ci recheck$
+    comment-job-template: "- {name} http://185.8.56.87/logs/{log_path}/ : {success} in {time}"
+    recheck-regexp: ^rally-ci recheck$
     env:
       GERRIT_PROJECT: change.project
       GERRIT_REF: patchSet.ref
@@ -39,8 +44,13 @@
     name: ci4950
     module: rallyci.providers.virsh
     key: /home/eye/.ssh/rally
+    freemb: 1024
+    maxla: 25
     hosts:
       - hostname: 10.1.1.1
+        port: 16622
+        key: /home/eye/.ssh/rally
+      - hostname: 10.1.1.2
         port: 16622
         key: /home/eye/.ssh/rally
     storage:
@@ -64,20 +74,34 @@
         url: https://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
       u1404:
         parent: u1404_bare
+        build-net: "br5"
         build-scripts: ["init_u1404", "clone_projects"]
       u1404_docker:
         parent: u1404
+        build-net: "br5"
         build-scripts: ["install_docker"]
+      u1404_docker_push:
+        parent: u1404_docker
+        build-net: "br5"
+        build-scripts: ["install_docker_push"]
       u1404_dsvm:
         parent: u1404
+        build-net: "br5"
         build-scripts: ["install_deps"]
     vms:
+      custom_u1404_docker_push:
+        memory: 1024
+        net: ["br5"]
       u1404_docker:
         memory: 1024
         image: u1404_docker
         net: ["br5"]
       u1404_dsvm:
         memory: 4096
+        image: u1404_dsvm
+        net: ["br5"]
+      u1404_dsvm_big:
+        memory: 11264
         image: u1404_dsvm
         net: ["br5"]
       u1404_rally_fuel:
@@ -117,6 +141,7 @@
       python /tmp/gp.py &
       #
       useradd -u 65510 -m rally || true
+      chsh rally -s /bin/bash
       sudo -i -u rally git config --global user.email "rally-ci@mirantis.com"
       sudo -i -u rally git config --global user.name "Mirantis Rally CI"
       echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
@@ -139,10 +164,10 @@
       openstack/nova \
       openstack/rally \
       openstack/heat \
+      openstack/sahara \
       openstack/heat-cfntools \
       openstack/heat-templates \
       openstack/keystone \
-      openstack/sahara \
       openstack/neutron \
       openstack/requirements \
       openstack-dev/ci-sandbox \
@@ -163,12 +188,11 @@
     name: install_deps
     interpreter: /bin/bash -xe -s
     data: |
-      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0
+      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client
       #
-      egrep -v 'marconiclient|pyngus' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
+      egrep -v 'marconiclient|pyngus|openstackclient' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
       rm -fr /root/.cache/pip
       python2 -m pip install -r /tmp/gr.txt
-      wait
 
 - script:
     name: git_checkout
@@ -207,13 +231,23 @@
     interpreter: /bin/bash -xe -s
     data: |
       cd rally
-      git checkout master && git pull
-      docker build -t rallyforge/rally .
-      mkdir /tmp/rv
-      sudo chown 65500 /tmp/rv
-      docker run -v /tmp/rv:/home/rally rallyforge/rally rally-manage db recreate
-      docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment list
-      echo "TODO: push rally image"
+      docker build --no-cache -t tmp .
+      docker run tmp rally deployment list
+      id=$(docker ps -a | grep rf | head -n 1 | awk '{print $1}')
+      docker export "$id" > /tmp/rc.tar
+      docker import - rallyforge/rally < /tmp/rc.tar
+      sudo /usr/bin/docker push rallyforge/rally
+      tags=$(curl https://index.docker.io/v1/repositories/rallyforge/rally/tags)
+      for tag in $(git tag); do
+      if [[ "$tag" =~ "$tags" ]]; then
+        echo $tag already in repo
+      else
+        echo Pushing "$tag"
+        git checkout "$tag"
+        docker build --no-cache -t "rallyforge/rally:$tag" .
+        sudo /usr/bin/docker push "rallyforge/rally:$tag"
+      fi
+      done
 
 - script:
     name: install_docker
@@ -223,23 +257,11 @@
       usermod -a -G docker rally || true
 
 - script:
-    name: update_devstack
+    name: install_docker_push
     interpreter: /bin/bash -xe -s
-    user: rally
     data: |
-      cd /opt/stack
-      ls -lh
-      ls -lh /var/repos
-      ls -lh /var/repos/openstack
-      for d in $(ls); do
-        cd $d
-        git pull || true
-        cd ..
-      done
-      egrep -v 'marconiclient|pyngus' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
-      sudo rm -fr /root/.cache/pip
-      sudo -H python2 -m pip install -r /tmp/gr.txt
-
+      echo 'rally ALL=NOPASSWD:/usr/bin/docker push rallyforge*' > /etc/sudoers.d/rally-docker-push
+      
 - script:
     name: init_rally_postgres
     interpreter: /bin/bash -xe -s
@@ -280,7 +302,7 @@
       ./tests/ci/rally-gate.py
 
 - script:
-    name: create_and_wait_deployment
+    name: create_deployment_mos
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
@@ -298,6 +320,20 @@
       EOF
       rally deployment create --name RCI --file /tmp/conf.json
       rally deployment config
+
+- script:
+    name: create_deployment_devstack
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      source /var/repos/openstack-dev/devstack/openrc || true
+      rally deployment create --name DSVM --fromenv || true
+
+- script:
+    name: wait_current_deployment
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
       n=0
       until [ $n -ge 60 ]
       do  
@@ -307,6 +343,14 @@
       done
       echo "Timeout waiting for cloud"
       exit 255
+
+- script:
+    name: run_rally_gate
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      cd ~/rally
+      rally task start --task $RCI_TASK
 
 - script:
     name: eth1_up
@@ -335,10 +379,18 @@
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      cd /opt/stack
+      for d in $(ls); do
+        pushd $d
+        git pull || true
+        sleep 2
+        popd
+      done
       cd /var/repos/openstack-dev/devstack
       git pull
       cat > local.conf <<EOF
       [[local|localrc]]
+      CINDER_ENABLE_V1_API=True
       ADMIN_PASSWORD=admin
       DATABASE_PASSWORD=admin
       RABBIT_PASSWORD=admin
@@ -349,9 +401,18 @@
       LOGDIR=/opt/stack/logs
       LOG_COLOR=False
       EOF
-      env
+      if [ -n "$WITH_SAHARA" ]; then
+      cat >> local.conf <<EOF
+      enable_service s-proxy s-object s-container s-account
+      SWIFT_HASH=66a3d6b56c1f479c8b4e70ab5c2000f5
+      SWIFT_REPLICAS=1
+      SWIFT_DATA_DIR=$DEST/data
+      enable_plugin sahara git://git.openstack.org/openstack/sahara
+      EOF
+      fi
       ls -lh /opt/stack
-      ./stack.sh
+      ./stack.sh > /tmp/stack.sh.log
+      mv /tmp/stack.sh.log /opt/stack/logs
 
 - script:
     name: rally_functional
@@ -420,7 +481,8 @@
             - git_checkout
             - install_rally
             - eth1_up
-            - create_and_wait_deployment
+            - create_deployment_mos
+            - wait_current_deployment
             - rally_gate
           scp:
             - ["/home/rally/rally/rally-plot", "rally-plot"]
@@ -455,7 +517,8 @@
             - git_checkout
             - install_rally
             - eth1_up
-            - create_and_wait_deployment
+            - create_deployment_mos
+            - wait_current_deployment
             - rally_gate
             - copy_mos_logs
 
@@ -472,9 +535,10 @@
             - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
           scripts:
             - git_checkout
-            - update_devstack
             - stack_sh
             - install_rally
+            - create_deployment_devstack
+            - wait_current_deployment
             - init_rally_postgres
             - rally_functional
             - gzip_ds_logs
@@ -492,9 +556,10 @@
             - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
           scripts:
             - git_checkout
-            - update_devstack
             - stack_sh
             - install_rally
+            - create_deployment_devstack
+            - wait_current_deployment
             - init_rally_postgres
             - rally_functional
             - gzip_ds_logs
@@ -507,7 +572,6 @@
         - name: u1404_docker
           scripts:
             - git_checkout
-            - install_docker
             - rally_docker_build_and_check
 
 - job:
@@ -515,10 +579,9 @@
     runner:
       name: main
       vms:
-        - name: u1404_docker
+        - name: custom_u1404_docker_push
           scripts:
             - git_checkout
-            - install_docker
             - rally_docker_push
 
 - job:
@@ -538,6 +601,26 @@
             - unittests
 
 - job:
+    name: rally-dsvm-sahara
+    env:
+      WITH_SAHARA: 1
+      RCI_TASK: rally-jobs/sahara.yaml
+    runner:
+      name: main
+      vms:
+        - name: u1404_dsvm_big
+          scripts:
+            - git_checkout
+            - stack_sh
+            - install_rally
+            - create_deployment_devstack
+            - wait_current_deployment
+            - run_rally_gate
+            - gzip_ds_logs
+          scp:
+            - ["/opt/stack/logs", "dsvm-logs"]
+
+- job:
     name: test
     env:
       RCI_OK: ok
@@ -555,6 +638,7 @@
     name: openstack-dev/ci-sandbox
     jobs:
       - test
+      - rally-dsvm-sahara
     on-ref-updated:
       - test
 
@@ -563,10 +647,11 @@
     on-ref-updated:
       - docker-push
     non-voting-jobs:
+      - rally-dsvm-pg-py27-cli
+      - rally-dsvm-pg-py34-cli
+      - rally-dsvm-sahara
+    jobs:
+      - docker-check
+      - rally-pg-py27-unit
+      - fuel-community-6.0
       - mos-6.1
-#    jobs:
-        #      - rally-dsvm-pg-py27-cli
-        #      - docker-check
-        #      - rally-pg-py27-unit
-        #      - fuel-community-6.0
-        #      - rally-dsvm-pg-py34-cli
