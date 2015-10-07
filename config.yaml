@@ -5,9 +5,9 @@
     error: /store/rally-ci/rally-ci.error.log
     debug: /store/rally-ci/rally-ci.debug.log
 
-- stream:
+- service:
     name: openstack
-    module: rallyci.streams.gerrit
+    module: rallyci.services.gerrit
     ssh:
       username: ci50
       hostname: review.openstack.org
@@ -50,9 +50,9 @@
       - hostname: 10.1.1.1
         port: 16622
         key: /home/eye/.ssh/rally
-      - hostname: 10.1.1.2
-        port: 16622
-        key: /home/eye/.ssh/rally
+#      - hostname: 10.1.1.2
+#        port: 16622
+#        key: /home/eye/.ssh/rally
     storage:
       backend: btrfs
       path: /ci/rally
@@ -71,7 +71,7 @@
             ssh-rsa ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDlDfJeEk+VbtjZrO61EZNK35c/htfMy6x44R6iPn8uJQwfJ6GaD0Yqnq3i9t4k8I80dASbBTFN/2Ze+xSeBIgSSHXytS1wSe6Npmki8WukWTdhdJiaTpi5DtX/Y9ce62ul87Z9w3ul8eeYeqV3/JFWcb41RxaFjE1K2UvXUzZFZdi+0JuqEVB2OtKzVp8qlowSSQg/lFk8b6XN4EK1Qw72rKJ1cEoolg21rwsfWqPlNZBOt85Wmk77C2W47vxQcUsOE7/yIJH+wclmJLassueipOyAJa0Y60Jejejznh12iFP9VpyG5KKoeCxfeZEPs9evOa5u6CfXTdcnlSfq4eP eye@ci49
     images:
       u1404_bare:
-        url: https://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
+        url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
       u1404:
         parent: u1404_bare
         build-net: "br5"
@@ -124,17 +124,28 @@
       mos_6_1_3:
         memory: 4096
         net: ["brmos% 52:54:00:fa:11:03"]
+      mos_7_0_1:
+        memory: 4096
+        net: ["brmos% 52:54:70:0a:11:01"]
+      mos_7_0_2:
+        memory: 4096
+        net: ["brmos% 52:54:70:0a:11:02"]
+      mos_7_0_3:
+        memory: 4096
+        net: ["brmos% 52:54:70:0a:11:03"]
 
 - script:
     name: init_u1404
     interpreter: /bin/bash -xe -s
     data: |
-      sleep 10
+      echo 'export http_proxy=http://10.1.1.2:3128/' > /etc/profile.d/15-proxy.sh
+      . /etc/profile.d/15-proxy.sh
+      sleep 12
+      rm -fr /home/rally/rally || true #DELME
+      rm -fr /etc/rally || true #DELME
       apt-get update && apt-get --force-yes -y upgrade
       apt-get remove --force-yes -y cloud-init
       apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass
-      echo 'export http_proxy=http://10.1.1.2:3128/' > /etc/profile.d/15-proxy.sh
-      . /etc/profile.d/15-proxy.sh
       #
       wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
       python3 /tmp/gp.py
@@ -155,6 +166,7 @@
     user: rally
     data: |
       env
+      rm -fr /etc/rally || true #DELME
       sudo mkdir -p /var/repos /opt/stack
       sudo chown rally /var/repos /opt/stack
       cd /var/repos
@@ -188,7 +200,8 @@
     name: install_deps
     interpreter: /bin/bash -xe -s
     data: |
-      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjpeg-turbo8 libjpeg8 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client
+      apt-get update && apt-get --force-yes -y upgrade
+      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client libjpeg-dev
       #
       egrep -v 'marconiclient|pyngus|openstackclient' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
       rm -fr /root/.cache/pip
@@ -243,9 +256,9 @@
         echo $tag already in repo
       else
         echo Pushing "$tag"
-        git checkout "$tag"
-        docker build --no-cache -t "rallyforge/rally:$tag" .
-        sudo /usr/bin/docker push "rallyforge/rally:$tag"
+        #git checkout "$tag"
+        #docker build --no-cache -t "rallyforge/rally:$tag" . && \
+        #sudo /usr/bin/docker push "rallyforge/rally:$tag" || echo "Failed to push tag $tag"
       fi
       done
 
@@ -271,6 +284,7 @@
       env
       apt-get --force-yes -y update
       apt-get --force-yes -y install postgresql
+      $RCI_PYTHON -m pip install psycopg2
       sudo -i -u postgres createuser -s -d -r -l rally
       sudo -i -u postgres createdb --owner=rally rally
       sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
@@ -280,6 +294,7 @@
     name: install_rally
     interpreter: /bin/bash -xe -s
     data: |
+      rm -fr /etc/rally || true #DELME
       cd /var/repos/openstack/rally
       RCI_PYTHON=${RCI_PYTHON:-python}
       sudo rm -fr /root/.cache/pip
@@ -489,6 +504,40 @@
         - name: fuel_community_60
 
 - job:
+    name: mos-7.0
+    env:
+      MOS_PUBLIC_VLAN: 100
+      MOS_MANAGEMENT_VLAN: 102
+      MOS_PRIVATE_VLAN: 103
+      MOS_PUBLIC_IP: 172.16.0.1/24
+      MOS_MANAGEMENT_IP: 192.168.0.1/24
+      MOS_PRIVATE_IP: 192.168.2.1/24
+      RALLY_SCENARIO: "rally-mos"
+      RALLY_MANIFEST: "rally-jobs/manifest-mos.yaml"
+      OS_AUTH_URL: "http://172.16.0.3:5000/v2.0/"
+      OS_USERNAME: admin
+      OS_PASSWORD: admin
+      OS_TENANT_NAME: admin
+    runner:
+      name: main
+      vms:
+        - name: mos_7_0_1
+        - name: mos_7_0_2
+        - name: mos_7_0_3
+        - name: u1404_rally_mos
+          scp:
+            - ["/tmp/mos-logs", "mos-logs"]
+            - ["/home/rally/rally/rally-plot", "rally-plot"]
+          scripts:
+            - git_checkout
+            - install_rally
+            - eth1_up
+            - create_deployment_mos
+            - wait_current_deployment
+            - rally_gate
+            - copy_mos_logs
+
+- job:
     name: mos-6.1
     env:
       MOS_PUBLIC_VLAN: 100
@@ -638,7 +687,6 @@
     name: openstack-dev/ci-sandbox
     jobs:
       - test
-      - rally-dsvm-sahara
     on-ref-updated:
       - test
 
@@ -647,11 +695,11 @@
     on-ref-updated:
       - docker-push
     non-voting-jobs:
-      - rally-dsvm-pg-py27-cli
-      - rally-dsvm-pg-py34-cli
       - rally-dsvm-sahara
     jobs:
       - docker-check
       - rally-pg-py27-unit
       - fuel-community-6.0
+      - rally-dsvm-pg-py27-cli
+      - rally-dsvm-pg-py34-cli
       - mos-6.1
