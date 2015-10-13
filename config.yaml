@@ -50,12 +50,13 @@
       - hostname: 10.1.1.1
         port: 16622
         key: /home/eye/.ssh/rally
-#      - hostname: 10.1.1.2
-#        port: 16622
-#        key: /home/eye/.ssh/rally
+      - hostname: 10.1.1.2
+        port: 16622
+        key: /home/eye/.ssh/rally
     storage:
-      backend: btrfs
+      backend: zfs
       path: /ci/rally
+      dataset: ci/rally
     metadata_server:
       listen_addr: 127.0.0.1
       listen_port: 8081
@@ -141,11 +142,14 @@
       echo 'export http_proxy=http://10.1.1.2:3128/' > /etc/profile.d/15-proxy.sh
       . /etc/profile.d/15-proxy.sh
       sleep 12
-      rm -fr /home/rally/rally || true #DELME
-      rm -fr /etc/rally || true #DELME
       apt-get update && apt-get --force-yes -y upgrade
+      apt-get install -y \
+        python3.4=3.4.0-2ubuntu1.1 \
+          python3.4-minimal=3.4.0-2ubuntu1.1 \
+            libpython3.4-stdlib=3.4.0-2ubuntu1.1 \
+              libpython3.4-minimal=3.4.0-2ubuntu1.1 # https://bugs.launchpad.net/ubuntu/+source/python3.4/+bug/1503382 (comment #2)
+      apt-get --force-yes -y install git python2.7 bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass python3-dev
       apt-get remove --force-yes -y cloud-init
-      apt-get --force-yes -y install git python2.7 python3-dev bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass
       #
       wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
       python3 /tmp/gp.py
@@ -213,11 +217,21 @@
     interpreter: /bin/bash -xe -s
     data: |
       env
+      retry () {
+        n=0
+        until [ $n -ge 5 ]
+        do
+          n=$[$n+1]
+          timeout 60 "$@" && break
+          echo "Retry in 15 seconds"
+          sleep 15
+        done
+      }
       PROJECT=${GERRIT_PROJECT:-$GERRIT_REFUPD_PROJECT}
       cd "/var/repos/$PROJECT"
       git checkout master && git pull
       if [ -n "$GERRIT_REF" ]; then
-          git fetch https://review.openstack.org/$PROJECT $GERRIT_REF
+          retry git fetch https://review.openstack.org/$PROJECT $GERRIT_REF
           git checkout FETCH_HEAD && git rebase master
       else
           git checkout $GERRIT_REFUPD_NEW
@@ -239,28 +253,62 @@
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment list
 
 - script:
+    name: pull_ubuntu_1404
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+        n=0
+        until [ $n -ge 5 ]
+        do
+          n=$[$n+1]
+          docker pull ubuntu:14.04 && break
+          echo "Retry in 5 seconds"
+          sleep 5
+        done
+
+- script:
     name: rally_docker_push
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
-      cd rally
-      docker build --no-cache -t tmp .
-      docker run tmp rally deployment list
-      id=$(docker ps -a | grep rf | head -n 1 | awk '{print $1}')
-      docker export "$id" > /tmp/rc.tar
-      docker import - rallyforge/rally < /tmp/rc.tar
-      sudo /usr/bin/docker push rallyforge/rally
+      pushd /home/rally/rally
+      mkdir /tmp/df || true
+      cat >/tmp/df/Dockerfile<<EOF
+      FROM image-flat
+      MAINTAINER Sergey Skripnick <sskripnick@mirantis.com>
+      VOLUME ["/home/rally"]
+      WORKDIR /home/rally
+      USER rally
+      ENV HOME /home/rally
+      CMD ["bash", "--login"]
+      EOF
+      build_and_push () {
+        TAG=$1
+        sudo docker build --no-cache -t image-built . || return 1
+        docker run image-built rally deployment list
+        id=$(docker ps -a | grep rf | head -n 1 | awk '{print $1}')
+        docker export $id > /tmp/rc.tar
+        docker import - image-flat < /tmp/rc.tar
+        pushd /tmp/df
+        sudo docker build -t rallyforge/rally:$TAG .
+        sudo /usr/bin/docker push rallyforge/rally
+        popd
+      }
+      substr () {
+        echo "$2" | grep "$1"
+      }
+      build_and_push latest
       tags=$(curl https://index.docker.io/v1/repositories/rallyforge/rally/tags)
       for tag in $(git tag); do
-      if [[ "$tag" =~ "$tags" ]]; then
-        echo $tag already in repo
-      else
-        echo Pushing "$tag"
-        #git checkout "$tag"
-        #docker build --no-cache -t "rallyforge/rally:$tag" . && \
-        #sudo /usr/bin/docker push "rallyforge/rally:$tag" || echo "Failed to push tag $tag"
-      fi
+        if substr "$tag" "$tags"; then
+          echo $tag already in repo
+        else
+          echo Pushing $tag
+          git checkout $tag
+          build_and_push $tag || true
+        fi
       done
+      popd
 
 - script:
     name: install_docker
@@ -274,6 +322,7 @@
     interpreter: /bin/bash -xe -s
     data: |
       echo 'rally ALL=NOPASSWD:/usr/bin/docker push rallyforge*' > /etc/sudoers.d/rally-docker-push
+      echo 'rally ALL=NOPASSWD:/usr/bin/docker build *' >> /etc/sudoers.d/rally-docker-push
       
 - script:
     name: init_rally_postgres
@@ -621,6 +670,7 @@
         - name: u1404_docker
           scripts:
             - git_checkout
+            - pull_ubuntu_1404
             - rally_docker_build_and_check
 
 - job:
@@ -631,6 +681,7 @@
         - name: custom_u1404_docker_push
           scripts:
             - git_checkout
+            - pull_ubuntu_1404
             - rally_docker_push
 
 - job:
@@ -695,11 +746,12 @@
     on-ref-updated:
       - docker-push
     non-voting-jobs:
-      - rally-dsvm-sahara
+        #- rally-dsvm-sahara
+        #- mos-7.0
+      - rally-dsvm-pg-py27-cli
+      - rally-dsvm-pg-py34-cli
     jobs:
       - docker-check
       - rally-pg-py27-unit
       - fuel-community-6.0
-      - rally-dsvm-pg-py27-cli
-      - rally-dsvm-pg-py34-cli
       - mos-6.1
