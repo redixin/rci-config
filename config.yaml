@@ -392,6 +392,7 @@
     data: |
       source /var/repos/openstack-dev/devstack/openrc || true
       rally deployment create --name DSVM --fromenv || true
+      rally deployment check || true
 
 - script:
     name: wait_current_deployment
@@ -462,6 +463,12 @@
       SERVICE_TOKEN=a862f596-76f3-21e3-b3b2-e716f9080d51
       disable_service tempest
       disable_service horizon
+      disable_service n-net
+      enable_service q-svc
+      enable_service q-agt
+      enable_service q-dhcp
+      enable_service q-l3
+      enable_service q-meta
       LOGDIR=/opt/stack/logs
       LOG_COLOR=False
       EOF
@@ -487,6 +494,7 @@
       export RCI_KEEP_DB=1
       source /var/repos/openstack-dev/devstack/openrc admin admin
       rally deployment create --name DEVSTACK --fromenv
+      rally deployment check
       cd rally
       $RCI_PYTHON -m unittest discover tests/functional
 
@@ -738,6 +746,7 @@
     name: openstack-dev/ci-sandbox
     jobs:
       - test
+    #non-voting-jobs:
     on-ref-updated:
       - test
 
