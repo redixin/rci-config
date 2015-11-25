@@ -16,9 +16,9 @@
     silent: false
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
-      
-      See status at: http://185.8.56.87/
-    comment-job-template: "- {name} http://185.8.56.87/logs/{log_path}/ : {success} in {time}"
+
+      See status at: https://rally-ci.tk/
+    comment-job-template: "- {name} https://rally-ci.tk/logs/{log_path}/ : {success} in {time}"
     recheck-regexp: ^rally-ci recheck$
     env:
       GERRIT_PROJECT: change.project
@@ -58,8 +58,8 @@
       path: /ci/rally
       dataset: ci/rally
     metadata_server:
-      listen_addr: 127.0.0.1
-      listen_port: 8081
+      listen_addr: 0.0.0.0
+      listen_port: 8089
       authorized_keys: /etc/rally-ci/authorized_keys
       user_data: |
         #cloud-config
@@ -102,7 +102,7 @@
         image: u1404_dsvm
         net: ["br5"]
       u1404_dsvm_big:
-        memory: 11264
+        memory: 12264
         image: u1404_dsvm
         net: ["br5"]
       u1404_rally_fuel:
@@ -143,11 +143,12 @@
       . /etc/profile.d/15-proxy.sh
       sleep 12
       apt-get update && apt-get --force-yes -y upgrade
-      apt-get install -y \
-        python3.4=3.4.0-2ubuntu1.1 \
-          python3.4-minimal=3.4.0-2ubuntu1.1 \
-            libpython3.4-stdlib=3.4.0-2ubuntu1.1 \
-              libpython3.4-minimal=3.4.0-2ubuntu1.1 # https://bugs.launchpad.net/ubuntu/+source/python3.4/+bug/1503382 (comment #2)
+      #apt-get install -y \
+      #  python3.4=3.4.0-2ubuntu1.1 \
+      #  python3.4-minimal=3.4.0-2ubuntu1.1 \
+      #  libpython3.4-stdlib=3.4.0-2ubuntu1.1 \
+      #  libpython3.4-minimal=3.4.0-2ubuntu1.1
+      #  https://bugs.launchpad.net/ubuntu/+source/python3.4/+bug/1503382 (comment #2)
       apt-get --force-yes -y install git python2.7 bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass python3-dev
       apt-get remove --force-yes -y cloud-init
       #
@@ -170,9 +171,10 @@
     user: rally
     data: |
       env
-      rm -fr /etc/rally || true #DELME
       sudo mkdir -p /var/repos /opt/stack
       sudo chown rally /var/repos /opt/stack
+      cd /opt/stack
+      git clone https://github.com/kanaka/noVNC.git &
       cd /var/repos
       projects="\
       openstack/cinder \
@@ -197,7 +199,7 @@
         ln -s /var/repos/$proj /opt/stack/$p
         cd ..
       done
-      ln -s /var/repos/openstack/rally /home/rally/rally
+      ln -s /var/repos/openstack/rally /home/rally/rally || true
       wait
 
 - script:
@@ -216,7 +218,9 @@
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      dig github.com
       env
+      df -h
       retry () {
         n=0
         until [ $n -ge 5 ]
@@ -244,6 +248,7 @@
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      docker --version
       cd /var/repos
       cd $GERRIT_PROJECT
       docker build -t rallyforge/rally .
@@ -251,6 +256,7 @@
       sudo chown 65500 /tmp/rv
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally-manage db recreate
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment list
+      docker run -v /tmp/rv:/home/rally rallyforge/rally rally version
 
 - script:
     name: pull_ubuntu_1404
@@ -271,6 +277,7 @@
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      docker --version
       pushd /home/rally/rally
       mkdir /tmp/df || true
       cat >/tmp/df/Dockerfile<<EOF
@@ -286,12 +293,13 @@
         TAG=$1
         sudo docker build --no-cache -t image-built . || return 1
         docker run image-built rally deployment list
-        id=$(docker ps -a | grep rf | head -n 1 | awk '{print $1}')
+        id=$(docker ps -aq | head -n 1)
         docker export $id > /tmp/rc.tar
         docker import - image-flat < /tmp/rc.tar
         pushd /tmp/df
         sudo docker build -t rallyforge/rally:$TAG .
-        sudo /usr/bin/docker push rallyforge/rally
+        /usr/bin/docker run rallyforge/rally:$TAG rally version
+        sudo /usr/bin/docker push rallyforge/rally:$TAG
         popd
       }
       substr () {
@@ -299,7 +307,7 @@
       }
       build_and_push latest
       tags=$(curl https://index.docker.io/v1/repositories/rallyforge/rally/tags)
-      for tag in $(git tag); do
+      for tag in $(git tag | grep -v '0\.0\.[1-3]'); do
         if substr "$tag" "$tags"; then
           echo $tag already in repo
         else
@@ -314,6 +322,7 @@
     name: install_docker
     interpreter: /bin/bash -xe -s
     data: |
+      apt-get --force-yes -y update && apt-get --force-yes -y upgrade
       apt-get --force-yes -y install docker.io
       usermod -a -G docker rally || true
 
@@ -343,7 +352,7 @@
     name: install_rally
     interpreter: /bin/bash -xe -s
     data: |
-      rm -fr /etc/rally || true #DELME
+      rm -fr /etc/rally || true
       cd /var/repos/openstack/rally
       RCI_PYTHON=${RCI_PYTHON:-python}
       sudo rm -fr /root/.cache/pip
@@ -352,6 +361,7 @@
       $RCI_PYTHON setup.py install
       mkdir /etc/rally
       cp etc/rally/rally.conf.sample /etc/rally/rally.conf
+      sed -i 's|^.*sahara_cluster_create_timeout.*$|sahara_cluster_create_timeout=3000|' /etc/rally/rally.conf
       sudo -u rally rally-manage db recreate
 
 - script:
@@ -359,11 +369,37 @@
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      unset http_proxy
+      unset https_proxy
+      sudo sh -c 'echo "\n10.1.1.1 sahara-files.mirantis.com\n" >> /etc/hosts'
       ${RCI_PYTHON:-python} -m pip freeze
       cd rally
       rally deployment list
       env
       ./tests/ci/rally-gate.py
+
+- script:
+    name: run_scenario
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      unset http_proxy
+      unset https_proxy
+      sudo sh -c 'echo "\n10.1.1.1 sahara-files.mirantis.com\n" >> /etc/hosts'
+      ${RCI_PYTHON:-python} -m pip freeze
+      cd rally
+      cp -r rally-jobs/extra ~/.rally
+      ls ~/.rally
+      rally deployment list
+      env
+      rally --rally-debug task validate --task $RCI_TASK --task-args $RCI_TASK_ARGS
+      rally --rally-debug task start --task $RCI_TASK --task-args $RCI_TASK_ARGS
+      mkdir rally-plot
+      rally --rally-debug task results | gzip > rally-plot/resutls.json.gz
+      rally --rally-debug task sla_check | gzip > rally-plot/sla.txt.gz
+      rally --rally-debug task detailed --iterations-data | gzip > rally-plot/detailed.txt.gz
+      rally --rally-debug task report --out rally-plot/report.html
+      rally --rally-debug task sla_check
 
 - script:
     name: create_deployment_mos
@@ -390,9 +426,9 @@
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
-      source /var/repos/openstack-dev/devstack/openrc || true
-      rally deployment create --name DSVM --fromenv || true
-      rally deployment check || true
+      source /var/repos/openstack-dev/devstack/openrc admin admin
+      rally deployment create --name DSVM --fromenv
+      rally deployment config
 
 - script:
     name: wait_current_deployment
@@ -408,14 +444,6 @@
       done
       echo "Timeout waiting for cloud"
       exit 255
-
-- script:
-    name: run_rally_gate
-    user: rally
-    interpreter: /bin/bash -xe -s
-    data: |
-      cd ~/rally
-      rally task start --task $RCI_TASK
 
 - script:
     name: eth1_up
@@ -444,6 +472,7 @@
     user: rally
     interpreter: /bin/bash -xe -s
     data: |
+      dig github.com
       cd /opt/stack
       for d in $(ls); do
         pushd $d
@@ -461,6 +490,7 @@
       RABBIT_PASSWORD=admin
       SERVICE_PASSWORD=admin
       SERVICE_TOKEN=a862f596-76f3-21e3-b3b2-e716f9080d51
+      disable_service zookeeper
       disable_service tempest
       disable_service horizon
       disable_service n-net
@@ -484,6 +514,8 @@
       ls -lh /opt/stack
       ./stack.sh > /tmp/stack.sh.log
       mv /tmp/stack.sh.log /opt/stack/logs
+      echo "Devstack build finished with local.conf:"
+      cat local.conf
 
 - script:
     name: rally_functional
@@ -564,13 +596,13 @@
     name: mos-7.0
     env:
       MOS_PUBLIC_VLAN: 100
-      MOS_MANAGEMENT_VLAN: 102
+      MOS_MANAGEMENT_VLAN: 101
       MOS_PRIVATE_VLAN: 103
       MOS_PUBLIC_IP: 172.16.0.1/24
-      MOS_MANAGEMENT_IP: 192.168.0.1/24
+      MOS_MANAGEMENT_IP: 192.168.0.254/24
       MOS_PRIVATE_IP: 192.168.2.1/24
-      RALLY_SCENARIO: "rally-mos"
-      RALLY_MANIFEST: "rally-jobs/manifest-mos.yaml"
+      RCI_TASK: "rally-jobs/rally-mos.yaml"
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.6.0"}'
       OS_AUTH_URL: "http://172.16.0.3:5000/v2.0/"
       OS_USERNAME: admin
       OS_PASSWORD: admin
@@ -591,7 +623,7 @@
             - eth1_up
             - create_deployment_mos
             - wait_current_deployment
-            - rally_gate
+            - run_scenario
             - copy_mos_logs
 
 - job:
@@ -603,8 +635,8 @@
       MOS_PUBLIC_IP: 172.16.0.1/24
       MOS_MANAGEMENT_IP: 192.168.0.1/24
       MOS_PRIVATE_IP: 192.168.2.1/24
-      RALLY_SCENARIO: "rally-mos"
-      RALLY_MANIFEST: "rally-jobs/manifest-mos.yaml"
+      RCI_TASK: "rally-jobs/rally-mos.yaml"
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.4.1"}'
       OS_AUTH_URL: "http://172.16.0.2:5000/v2.0/"
       OS_USERNAME: admin
       OS_PASSWORD: admin
@@ -625,7 +657,7 @@
             - eth1_up
             - create_deployment_mos
             - wait_current_deployment
-            - rally_gate
+            - run_scenario
             - copy_mos_logs
 
 - job:
@@ -712,7 +744,8 @@
     name: rally-dsvm-sahara
     env:
       WITH_SAHARA: 1
-      RCI_TASK: rally-jobs/sahara.yaml
+      RCI_TASK: rally-jobs/sahara-clusters.yaml
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.6.0"}'
     runner:
       name: main
       vms:
@@ -723,10 +756,11 @@
             - install_rally
             - create_deployment_devstack
             - wait_current_deployment
-            - run_rally_gate
+            - run_scenario
             - gzip_ds_logs
           scp:
             - ["/opt/stack/logs", "dsvm-logs"]
+            - ["/home/rally/rally/rally-plot", "rally-plot"]
 
 - job:
     name: test
@@ -755,12 +789,12 @@
     on-ref-updated:
       - docker-push
     non-voting-jobs:
-        #- rally-dsvm-sahara
-        #- mos-7.0
-      - rally-dsvm-pg-py27-cli
-      - rally-dsvm-pg-py34-cli
+      - mos-7.0
+      - mos-6.1
+      - rally-dsvm-sahara
     jobs:
       - docker-check
       - rally-pg-py27-unit
       - fuel-community-6.0
-      - mos-6.1
+      - rally-dsvm-pg-py27-cli
+      - rally-dsvm-pg-py34-cli
