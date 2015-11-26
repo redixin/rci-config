@@ -102,7 +102,8 @@
         image: u1404_dsvm
         net: ["br5"]
       u1404_dsvm_big:
-        memory: 12264
+        memory: 10240
+        vcpu: 2
         image: u1404_dsvm
         net: ["br5"]
       u1404_rally_fuel:
@@ -361,7 +362,7 @@
       $RCI_PYTHON setup.py install
       mkdir /etc/rally
       cp etc/rally/rally.conf.sample /etc/rally/rally.conf
-      sed -i 's|^.*sahara_cluster_create_timeout.*$|sahara_cluster_create_timeout=3000|' /etc/rally/rally.conf
+      sed -i 's|^.*sahara_cluster_create_timeout.*$|sahara_cluster_create_timeout=6000|' /etc/rally/rally.conf
       sudo -u rally rally-manage db recreate
 
 - script:
@@ -505,6 +506,7 @@
       if [ -n "$WITH_SAHARA" ]; then
       cat >> local.conf <<EOF
       enable_service s-proxy s-object s-container s-account
+      enable_service h-eng h-api h-api-cfn h-api-cw heat # heat
       SWIFT_HASH=66a3d6b56c1f479c8b4e70ab5c2000f5
       SWIFT_REPLICAS=1
       SWIFT_DATA_DIR=$DEST/data
@@ -745,7 +747,7 @@
     env:
       WITH_SAHARA: 1
       RCI_TASK: rally-jobs/sahara-clusters.yaml
-      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.6.0"}'
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1"}'
     runner:
       name: main
       vms:
