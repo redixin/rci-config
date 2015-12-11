@@ -6,7 +6,7 @@
     debug: /store/rally-ci/rally-ci.debug.log
 
 - service:
-    name: openstack
+    name: openstack-gerrit
     module: rallyci.services.gerrit
     ssh:
       username: ci50
@@ -98,6 +98,7 @@
         image: u1404_docker
         net: ["br5"]
       u1404_dsvm:
+        vcpu: 2
         memory: 4096
         image: u1404_dsvm
         net: ["br5"]
@@ -144,12 +145,6 @@
       . /etc/profile.d/15-proxy.sh
       sleep 12
       apt-get update && apt-get --force-yes -y upgrade
-      #apt-get install -y \
-      #  python3.4=3.4.0-2ubuntu1.1 \
-      #  python3.4-minimal=3.4.0-2ubuntu1.1 \
-      #  libpython3.4-stdlib=3.4.0-2ubuntu1.1 \
-      #  libpython3.4-minimal=3.4.0-2ubuntu1.1
-      #  https://bugs.launchpad.net/ubuntu/+source/python3.4/+bug/1503382 (comment #2)
       apt-get --force-yes -y install git python2.7 bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass python3-dev
       apt-get remove --force-yes -y cloud-init
       #
@@ -213,6 +208,7 @@
       egrep -v 'marconiclient|pyngus|openstackclient' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
       rm -fr /root/.cache/pip
       python2 -m pip install -r /tmp/gr.txt
+      python2 -m pip install pytest-xdist pytest-html numpy
 
 - script:
     name: git_checkout
@@ -531,6 +527,24 @@
       rally deployment check
       cd rally
       $RCI_PYTHON -m unittest discover tests/functional
+      uptime
+
+- script:
+    name: rally_functional_pytest
+    user: rally
+    interpreter: /bin/bash -xe -s
+    data: |
+      RCI_PYTHON=${RCI_PYTHON:-python}
+      sudo $RCI_PYTHON -m pip install pytest-xdist pytest-html
+      $RCI_PYTHON -m pip freeze
+      export RCI_KEEP_DB=1
+      source /var/repos/openstack-dev/devstack/openrc admin admin
+      rally deployment create --name DEVSTACK --fromenv
+      rally deployment check
+      cd rally
+      $RCI_PYTHON -m pytest --html=results.html tests/functional
+      gzip -9 results.html
+      uptime
 
 - script:
     name: gzip_ds_logs
@@ -683,6 +697,29 @@
             - rally_functional
             - gzip_ds_logs
 
+
+- job:
+    name: rally-dsvm-pg-py34-cli-pytest
+    env:
+      RCI_PYTHON: /usr/bin/python3
+    runner:
+      name: main
+      vms:
+        - name: u1404_dsvm
+          scp:
+            - ["/opt/stack/logs", "devstack-logs"]
+            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
+            - ["/home/rally/rally/results.html.gz", ""]
+          scripts:
+            - git_checkout
+            - stack_sh
+            - install_rally
+            - create_deployment_devstack
+            - wait_current_deployment
+            - init_rally_postgres
+            - rally_functional_pytest
+            - gzip_ds_logs
+
 - job:
     name: rally-dsvm-pg-py34-cli
     env:
@@ -790,13 +827,12 @@
     name: openstack/rally
     on-ref-updated:
       - docker-push
-    non-voting-jobs:
-      - mos-7.0
-      - mos-6.1
-      - rally-dsvm-sahara
     jobs:
       - docker-check
       - rally-pg-py27-unit
       - fuel-community-6.0
       - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
+      - mos-7.0
+      - mos-6.1
+      - rally-dsvm-sahara
