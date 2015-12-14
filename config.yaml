@@ -58,6 +58,12 @@
       path: /ci/rally
       dataset: ci/rally
     images:
+      u1404_new:
+        url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
+      u1404_dev:
+        parent: u1404_new
+        build-net: "br5"
+        build-scripts: ["init_u1404", "clone_projects"]
       u1404_bare:
         url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
       u1404_dev:
@@ -76,6 +82,10 @@
         parent: u1404_dev
         build-net: "br5"
         build-scripts: ["install_deps"]
+      u1404_dsvm_new:
+        parent: u1404_dev
+        build-net: "br5"
+        build-scripts: ["install_deps"]
     vms:
       custom_u1404_docker_push:
         memory: 1024
@@ -83,6 +93,11 @@
       u1404_docker:
         memory: 1024
         image: u1404_docker
+        net: ["br5"]
+      u1404_dsvm_new:
+        vcpu: 2
+        memory: 4096
+        image: u1404_dsvm_new
         net: ["br5"]
       u1404_dsvm:
         vcpu: 2
@@ -192,7 +207,7 @@
       apt-get update && apt-get --force-yes -y upgrade
       apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client libjpeg-dev
       #
-      egrep -v 'marconiclient|pyngus|openstackclient' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
+      egrep -v 'monasca|marconiclient|pyngus|openstackclient' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
       rm -fr /root/.cache/pip
       python2 -m pip install -r /tmp/gr.txt
       python2 -m pip install pytest-xdist pytest-html numpy
@@ -644,25 +659,23 @@
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
     provider: ci4950
-    runner:
-      name: main
-      vms:
-        - name: mos_6_1_1
-        - name: mos_6_1_2
-        - name: mos_6_1_3
-        - name: u1404_rally_mos
-          publish:
-            - ["/tmp/mos-logs", "mos-logs"]
-            - ["/home/rally/rally/rally-plot", "rally-plot"]
-          scripts:
-            - git_checkout
-            - install_rally
-            - eth1_up
-            - create_deployment_mos
-            - wait_current_deployment
-            - run_scenario
-          post:
-            - copy_mos_logs
+    vms:
+      - name: mos_6_1_1
+      - name: mos_6_1_2
+      - name: mos_6_1_3
+      - name: u1404_rally_mos
+        publish:
+          - ["/tmp/mos-logs", "mos-logs"]
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
+        scripts:
+          - git_checkout
+          - install_rally
+          - eth1_up
+          - create_deployment_mos
+          - wait_current_deployment
+          - run_scenario
+        post:
+          - copy_mos_logs
 
 - job:
     name: rally-dsvm-pg-py27-cli
@@ -670,7 +683,7 @@
       RCI_PYTHON: /usr/bin/python2.7
     provider: ci4950
     vms:
-      - name: u1404_dsvm
+      - name: u1404_dsvm_new
         publish:
           - ["/opt/stack/logs", "devstack-logs"]
           - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
@@ -684,7 +697,6 @@
           - rally_functional
         post:
           - gzip_ds_logs
-
 
 - job:
     name: rally-dsvm-pg-py34-cli-pytest
@@ -813,16 +825,16 @@
 - matrix:
     name: rally
     projects:
-      - openstack/rally_
-    merge-jobs:
+      - openstack/rally
+    merged-jobs:
       - docker-push
     non-voting-jobs:
-      - rally-dsvm-pg-py27-cli
+      - fuel-community-6.0
       - rally-dsvm-sahara
     jobs:
       - docker-check
       - rally-pg-py27-unit
-      - fuel-community-6.0
       - rally-dsvm-pg-py34-cli
+      - rally-dsvm-pg-py27-cli
       - mos-7.0
       - mos-6.1
