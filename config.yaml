@@ -5,20 +5,30 @@
     error: /store/rally-ci/rally-ci.error.log
     debug: /store/rally-ci/rally-ci.debug.log
 
+- rally-ci:
+    pub-dir: /store/rally-ci/logs
+
+- ssh-key:
+    name: default
+    public: "/home/eye/.ssh/rally.pub"
+    private: "/home/eye/.ssh/rally"
+
 - service:
     name: openstack-gerrit
     module: rallyci.services.gerrit
     ssh:
       username: ci50
       hostname: review.openstack.org
-      key: /home/eye/.ssh/rally
     vote: true
     silent: false
+    cfg-url-template: https://review.openstack.org/gitweb?p={project}.git;a=blob_plain;f=.rally-ci.yaml;hb={commit}
+    cr-url-template: https://review.openstack.org/#q,{commit},n,z
+    commit-url-template: http://git.openstack.org/cgit/{project}/commit/?id={commit}
+    comment-job-template: "- {name} https://rally-ci.tk/logs/{log_path}/ : {success} in {time}"
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
 
       See status at: https://rally-ci.tk/
-    comment-job-template: "- {name} https://rally-ci.tk/logs/{log_path}/ : {success} in {time}"
     recheck-regexp: ^rally-ci recheck$
     env:
       GERRIT_PROJECT: change.project
@@ -33,52 +43,29 @@
     module: rallyci.services.status
     listen: [127.0.0.1, 8080]
 
-- runner:
-    name: main
-    provider: ci4950
-    module: rallyci.runners.ssh
-    key: /home/eye/.ssh/rally
-    logs: /store/rally-ci/logs
-
 - provider:
     name: ci4950
     module: rallyci.providers.virsh
-    key: /home/eye/.ssh/rally
     freemb: 1024
     maxla: 25
     hosts:
       - hostname: 10.1.1.1
         port: 16622
-        key: /home/eye/.ssh/rally
       - hostname: 10.1.1.2
         port: 16622
-        key: /home/eye/.ssh/rally
     storage:
       backend: zfs
       path: /ci/rally
       dataset: ci/rally
-    metadata_server:
-      listen_addr: 0.0.0.0
-      listen_port: 8089
-      authorized_keys: /etc/rally-ci/authorized_keys
-      user_data: |
-        #cloud-config
-        manage_etc_hosts: true
-        bootcmd:
-          - echo 'root:r00tme' | chpasswd
-        disable_root: 0
-        ssh_pwauth: True
-        ssh_authorized_keys:
-            ssh-rsa ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDlDfJeEk+VbtjZrO61EZNK35c/htfMy6x44R6iPn8uJQwfJ6GaD0Yqnq3i9t4k8I80dASbBTFN/2Ze+xSeBIgSSHXytS1wSe6Npmki8WukWTdhdJiaTpi5DtX/Y9ce62ul87Z9w3ul8eeYeqV3/JFWcb41RxaFjE1K2UvXUzZFZdi+0JuqEVB2OtKzVp8qlowSSQg/lFk8b6XN4EK1Qw72rKJ1cEoolg21rwsfWqPlNZBOt85Wmk77C2W47vxQcUsOE7/yIJH+wclmJLassueipOyAJa0Y60Jejejznh12iFP9VpyG5KKoeCxfeZEPs9evOa5u6CfXTdcnlSfq4eP eye@ci49
     images:
       u1404_bare:
         url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
-      u1404:
+      u1404_dev:
         parent: u1404_bare
         build-net: "br5"
         build-scripts: ["init_u1404", "clone_projects"]
       u1404_docker:
-        parent: u1404
+        parent: u1404_dev
         build-net: "br5"
         build-scripts: ["install_docker"]
       u1404_docker_push:
@@ -86,7 +73,7 @@
         build-net: "br5"
         build-scripts: ["install_docker_push"]
       u1404_dsvm:
-        parent: u1404
+        parent: u1404_dev
         build-net: "br5"
         build-scripts: ["install_deps"]
     vms:
@@ -109,11 +96,11 @@
         net: ["br5"]
       u1404_rally_fuel:
         memory: 1024
-        image: u1404
+        image: u1404_dev
         net: ["br5", "brfuel%"]
       u1404_rally_mos:
         memory: 1024
-        image: u1404
+        image: u1404_dev
         net: ["br5", "brmos%"]
       fuel_community_60:
         memory: 4096
@@ -353,7 +340,7 @@
       cd /var/repos/openstack/rally
       RCI_PYTHON=${RCI_PYTHON:-python}
       sudo rm -fr /root/.cache/pip
-      $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt -r optional-requirements.txt
+      $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt # -r optional-requirements.txt
       $RCI_PYTHON setup.py build
       $RCI_PYTHON setup.py install
       mkdir /etc/rally
@@ -593,20 +580,19 @@
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
-    runner:
-      name: main
-      vms:
-        - name: u1404_rally_fuel
-          scripts:
-            - git_checkout
-            - install_rally
-            - eth1_up
-            - create_deployment_mos
-            - wait_current_deployment
-            - rally_gate
-          scp:
-            - ["/home/rally/rally/rally-plot", "rally-plot"]
-        - name: fuel_community_60
+    provider: ci4950
+    vms:
+      - name: u1404_rally_fuel
+        scripts:
+          - git_checkout
+          - install_rally
+          - eth1_up
+          - create_deployment_mos
+          - wait_current_deployment
+          - rally_gate
+        publish:
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
+      - name: fuel_community_60
 
 - job:
     name: mos-7.0
@@ -623,24 +609,24 @@
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
-    runner:
-      name: main
-      vms:
-        - name: mos_7_0_1
-        - name: mos_7_0_2
-        - name: mos_7_0_3
-        - name: u1404_rally_mos
-          scp:
-            - ["/tmp/mos-logs", "mos-logs"]
-            - ["/home/rally/rally/rally-plot", "rally-plot"]
-          scripts:
-            - git_checkout
-            - install_rally
-            - eth1_up
-            - create_deployment_mos
-            - wait_current_deployment
-            - run_scenario
-            - copy_mos_logs
+    provider: ci4950
+    vms:
+      - name: mos_7_0_1
+      - name: mos_7_0_2
+      - name: mos_7_0_3
+      - name: u1404_rally_mos
+        publish:
+          - ["/tmp/mos-logs", "mos-logs"]
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
+        scripts:
+          - git_checkout
+          - install_rally
+          - eth1_up
+          - create_deployment_mos
+          - wait_current_deployment
+          - run_scenario
+        post:
+          - copy_mos_logs
 
 - job:
     name: mos-6.1
@@ -657,6 +643,7 @@
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
+    provider: ci4950
     runner:
       name: main
       vms:
@@ -664,7 +651,7 @@
         - name: mos_6_1_2
         - name: mos_6_1_3
         - name: u1404_rally_mos
-          scp:
+          publish:
             - ["/tmp/mos-logs", "mos-logs"]
             - ["/home/rally/rally/rally-plot", "rally-plot"]
           scripts:
@@ -674,94 +661,93 @@
             - create_deployment_mos
             - wait_current_deployment
             - run_scenario
+          post:
             - copy_mos_logs
 
 - job:
     name: rally-dsvm-pg-py27-cli
     env:
       RCI_PYTHON: /usr/bin/python2.7
-    runner:
-      name: main
-      vms:
-        - name: u1404_dsvm
-          scp:
-            - ["/opt/stack/logs", "devstack-logs"]
-            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
-          scripts:
-            - git_checkout
-            - stack_sh
-            - install_rally
-            - create_deployment_devstack
-            - wait_current_deployment
-            - init_rally_postgres
-            - rally_functional
-            - gzip_ds_logs
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm
+        publish:
+          - ["/opt/stack/logs", "devstack-logs"]
+          - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
+        scripts:
+          - git_checkout
+          - stack_sh
+          - install_rally
+          - create_deployment_devstack
+          - wait_current_deployment
+          - init_rally_postgres
+          - rally_functional
+        post:
+          - gzip_ds_logs
 
 
 - job:
     name: rally-dsvm-pg-py34-cli-pytest
     env:
       RCI_PYTHON: /usr/bin/python3
-    runner:
-      name: main
-      vms:
-        - name: u1404_dsvm
-          scp:
-            - ["/opt/stack/logs", "devstack-logs"]
-            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
-            - ["/home/rally/rally/results.html.gz", ""]
-          scripts:
-            - git_checkout
-            - stack_sh
-            - install_rally
-            - create_deployment_devstack
-            - wait_current_deployment
-            - init_rally_postgres
-            - rally_functional_pytest
-            - gzip_ds_logs
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm
+        publish:
+          - ["/opt/stack/logs", "devstack-logs"]
+          - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
+          - ["/home/rally/rally/results.html.gz", ""]
+        scripts:
+          - git_checkout
+          - stack_sh
+          - install_rally
+          - create_deployment_devstack
+          - wait_current_deployment
+          - init_rally_postgres
+          - rally_functional_pytest
+        post:
+          - gzip_ds_logs
 
 - job:
     name: rally-dsvm-pg-py34-cli
     env:
       RCI_PYTHON: /usr/bin/python3
-    runner:
-      name: main
-      vms:
-        - name: u1404_dsvm
-          scp:
-            - ["/opt/stack/logs", "devstack-logs"]
-            - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
-          scripts:
-            - git_checkout
-            - stack_sh
-            - install_rally
-            - create_deployment_devstack
-            - wait_current_deployment
-            - init_rally_postgres
-            - rally_functional
-            - gzip_ds_logs
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm
+        publish:
+          - ["/opt/stack/logs", "devstack-logs"]
+          - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
+        scripts:
+          - git_checkout
+          - stack_sh
+          - install_rally
+          - create_deployment_devstack
+          - wait_current_deployment
+          - init_rally_postgres
+          - rally_functional
+        post:
+          - gzip_ds_logs
 
 - job:
     name: docker-check
-    runner:
-      name: main
-      vms:
-        - name: u1404_docker
-          scripts:
-            - git_checkout
-            - pull_ubuntu_1404
-            - rally_docker_build_and_check
+    provider: ci4950
+    vms:
+      - name: u1404_docker
+        scripts:
+          - git_checkout
+          - pull_ubuntu_1404
+          - rally_docker_build_and_check
 
 - job:
     name: docker-push
-    runner:
-      name: main
-      vms:
-        - name: custom_u1404_docker_push
-          scripts:
-            - git_checkout
-            - pull_ubuntu_1404
-            - rally_docker_push
+    provider: ci4950
+    vms:
+      - name: custom_u1404_docker_push
+        scripts:
+          - git_checkout
+          - pull_ubuntu_1404
+          - rally_docker_push
 
 - job:
     name: rally-pg-py27-unit
@@ -769,15 +755,14 @@
       RCI_PYTHON: python2.7
       RCI_UNITTESTS_DIR: tests/unit
       RALLY_UNITTEST_DB_URL: "postgresql:///rally?host=/var/run/postgresql"
-    runner:
-      name: main
-      vms:
-        - name: u1404_dsvm
-          scripts:
-            - git_checkout
-            - install_rally
-            - init_rally_postgres
-            - unittests
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm
+        scripts:
+          - git_checkout
+          - install_rally
+          - init_rally_postgres
+          - unittests
 
 - job:
     name: rally-dsvm-sahara
@@ -785,54 +770,59 @@
       WITH_SAHARA: 1
       RCI_TASK: rally-jobs/sahara-clusters.yaml
       RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1"}'
-    runner:
-      name: main
-      vms:
-        - name: u1404_dsvm_big
-          scripts:
-            - git_checkout
-            - stack_sh
-            - install_rally
-            - create_deployment_devstack
-            - wait_current_deployment
-            - run_scenario
-            - gzip_ds_logs
-          scp:
-            - ["/opt/stack/logs", "dsvm-logs"]
-            - ["/home/rally/rally/rally-plot", "rally-plot"]
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm_big
+        scripts:
+          - git_checkout
+          - stack_sh
+          - install_rally
+          - create_deployment_devstack
+          - wait_current_deployment
+          - run_scenario
+        post:
+          - gzip_ds_logs
+        publish:
+          - ["/opt/stack/logs", "dsvm-logs"]
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
 
 - job:
     name: test
     env:
       RCI_OK: ok
-    runner:
-      name: main
-      vms:
-        - name: u1404_dsvm
-          scp:
-            - ["/home/rally", "test-logs"]
-          scripts:
-            - git_checkout
-            - show_git_log
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm
+        publish:
+          - ["/home/rally", "test-logs"]
+        scripts:
+          - git_checkout
+          - show_git_log
 
-- project:
-    name: openstack-dev/ci-sandbox
+- matrix:
+    name: test
+    projects:
+      - openstack-dev/ci-sandbox
     jobs:
       - test
-    #non-voting-jobs:
-    on-ref-updated:
+    non-voting-jobs:
+      - docker-check
+    merged-jobs:
       - test
 
-- project:
-    name: openstack/rally
-    on-ref-updated:
+- matrix:
+    name: rally
+    projects:
+      - openstack/rally_
+    merge-jobs:
       - docker-push
+    non-voting-jobs:
+      - rally-dsvm-pg-py27-cli
+      - rally-dsvm-sahara
     jobs:
       - docker-check
       - rally-pg-py27-unit
       - fuel-community-6.0
-      - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
       - mos-7.0
       - mos-6.1
-      - rally-dsvm-sahara
