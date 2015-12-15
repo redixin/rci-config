@@ -21,7 +21,7 @@
       hostname: review.openstack.org
     vote: true
     silent: false
-    cfg-url-template: https://review.openstack.org/gitweb?p={project}.git;a=blob_plain;f=.rally-ci.yaml;hb={commit}
+    cfg-url-template: http://git.openstack.org/cgit/{project}/plain/.rally-ci.yaml?id={commit}
     cr-url-template: https://review.openstack.org/#q,{commit},n,z
     commit-url-template: http://git.openstack.org/cgit/{project}/commit/?id={commit}
     comment-job-template: "- {name} https://rally-ci.tk/logs/{log_path}/ : {success} in {time}"
@@ -355,7 +355,10 @@
       cd /var/repos/openstack/rally
       RCI_PYTHON=${RCI_PYTHON:-python}
       sudo rm -fr /root/.cache/pip
-      $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt # -r optional-requirements.txt
+      $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt
+      if [ -n "$WITH_OPTIONAL_REQUIREMENTS" ]; then
+          $RCI_PYTHON -m pip install -r optional-requirements.txt
+      fi
       $RCI_PYTHON setup.py build
       $RCI_PYTHON setup.py install
       mkdir /etc/rally
@@ -589,6 +592,7 @@
 - job:
     name: fuel-community-6.0
     env:
+      WITH_OPTIONAL_REQUIREMENTS: "true"
       RALLY_SCENARIO: "fuel"
       RCI_IP: "10.20.0.3/24"
       OS_AUTH_URL: "http://10.20.0.2:5000/v2.0/"
