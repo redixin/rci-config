@@ -21,7 +21,7 @@
       hostname: review.openstack.org
     vote: true
     silent: false
-    cfg-url-template: http://git.openstack.org/cgit/{project}/plain/.rally-ci.yaml?id={commit}
+    cfg-url-template: https://review.openstack.org/gitweb?p={project}.git;a=blob_plain;f=.rally-ci.yaml;hb={commit}
     cr-url-template: https://review.openstack.org/#q,{commit},n,z
     commit-url-template: http://git.openstack.org/cgit/{project}/commit/?id={commit}
     comment-job-template: "- {name} https://rally-ci.tk/logs/{log_path}/ : {success} in {time}"
@@ -141,7 +141,6 @@
 
 - script:
     name: init_u1404
-    interpreter: /bin/bash -xe -s
     data: |
       echo 'export http_proxy=http://10.1.1.2:3128/' > /etc/profile.d/15-proxy.sh
       . /etc/profile.d/15-proxy.sh
@@ -165,7 +164,6 @@
 
 - script:
     name: clone_projects
-    interpreter: /bin/bash -xe -s
     user: rally
     data: |
       env
@@ -202,7 +200,6 @@
 
 - script:
     name: install_deps
-    interpreter: /bin/bash -xe -s
     data: |
       apt-get update && apt-get --force-yes -y upgrade
       apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client libjpeg-dev
@@ -215,7 +212,6 @@
 - script:
     name: git_checkout
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       dig github.com
       env
@@ -245,7 +241,6 @@
 - script:
     name: rally_docker_build_and_check
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       docker --version
       cd /var/repos
@@ -260,21 +255,19 @@
 - script:
     name: pull_ubuntu_1404
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
-        n=0
-        until [ $n -ge 5 ]
-        do
-          n=$[$n+1]
-          docker pull ubuntu:14.04 && break
-          echo "Retry in 5 seconds"
-          sleep 5
-        done
+      n=0
+      until [ $n -ge 5 ]
+      do
+        n=$[$n+1]
+        docker pull ubuntu:14.04 && break
+        echo "Retry in 5 seconds"
+        sleep 5
+      done
 
 - script:
     name: rally_docker_push
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       docker --version
       pushd /home/rally/rally
@@ -319,7 +312,6 @@
 
 - script:
     name: install_docker
-    interpreter: /bin/bash -xe -s
     data: |
       apt-get --force-yes -y update && apt-get --force-yes -y upgrade
       apt-get --force-yes -y install docker.io
@@ -327,68 +319,60 @@
 
 - script:
     name: install_docker_push
-    interpreter: /bin/bash -xe -s
     data: |
       echo 'rally ALL=NOPASSWD:/usr/bin/docker push rallyforge*' > /etc/sudoers.d/rally-docker-push
       echo 'rally ALL=NOPASSWD:/usr/bin/docker build *' >> /etc/sudoers.d/rally-docker-push
       
 - script:
-    name: init_rally_postgres
-    interpreter: /bin/bash -xe -s
-    data: |
-      unset LANG
-      unset ${!LC_*}
-      env
-      apt-get --force-yes -y update
-      apt-get --force-yes -y install postgresql
-      $RCI_PYTHON -m pip install psycopg2
-      sudo -i -u postgres createuser -s -d -r -l rally
-      sudo -i -u postgres createdb --owner=rally rally
-      sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
-      sudo -u rally rally-manage db recreate
-
-- script:
     name: install_rally
-    interpreter: /bin/bash -xe -s
     data: |
-      rm -fr /etc/rally || true
-      cd /var/repos/openstack/rally
+      RALLY_DIR=/var/repos/openstack/rally
+      VENV=${RALLY_DIR}/.venv
       RCI_PYTHON=${RCI_PYTHON:-python}
+      cd $RALLY_DIR
+      apt-get -y install python-virtualenv && virtualenv $VENV -p $RCI_PYTHON
+      RCI_PYTHON=${VENV}/bin/python
       sudo rm -fr /root/.cache/pip
-      $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt
-      if [ -n "$WITH_OPTIONAL_REQUIREMENTS" ]; then
-          $RCI_PYTHON -m pip install -r optional-requirements.txt
-      fi
+      $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt -r optional-requirements.txt
       $RCI_PYTHON setup.py build
       $RCI_PYTHON setup.py install
       mkdir /etc/rally
       cp etc/rally/rally.conf.sample /etc/rally/rally.conf
       sed -i 's|^.*sahara_cluster_create_timeout.*$|sahara_cluster_create_timeout=6000|' /etc/rally/rally.conf
-      sudo -u rally rally-manage db recreate
+      ln -s ${VENV}/bin/rally /usr/local/bin/
+      ln -s ${VENV}/bin/rally-manage /usr/local/bin/
+      if [ -n "RALLY_POSTGRES" ]; then
+        unset LANG
+        unset ${!LC_*}
+        apt-get --force-yes -y install postgresql
+        sudo -i -u postgres createuser -s -d -r -l rally
+        sudo -i -u postgres createdb --owner=rally rally
+        sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
+        $RCI_PYTHON -m pip install psycopg2
+      fi
+      sudo -u rally /usr/local/bin/rally-manage db recreate
 
 - script:
     name: rally_gate
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       unset http_proxy
       unset https_proxy
       sudo sh -c 'echo "\n10.1.1.1 sahara-files.mirantis.com\n" >> /etc/hosts'
-      ${RCI_PYTHON:-python} -m pip freeze
-      cd rally
+      which rally
       rally deployment list
+      cd rally
       env
-      ./tests/ci/rally-gate.py
+      /var/repos/openstack/rally/.venv/bin/$RCI_PYTHON -m pip freeze
+      /var/repos/openstack/rally/.venv/bin/$RCI_PYTHON tests/ci/rally-gate.py
 
 - script:
     name: run_scenario
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       unset http_proxy
       unset https_proxy
       sudo sh -c 'echo "\n10.1.1.1 sahara-files.mirantis.com\n" >> /etc/hosts'
-      ${RCI_PYTHON:-python} -m pip freeze
       cd rally
       cp -r rally-jobs/extra ~/.rally
       ls ~/.rally
@@ -406,7 +390,6 @@
 - script:
     name: create_deployment_mos
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       rally-manage db recreate
       cat <<EOF > /tmp/conf.json
@@ -426,7 +409,6 @@
 - script:
     name: create_deployment_devstack
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       source /var/repos/openstack-dev/devstack/openrc admin admin
       rally deployment create --name DSVM --fromenv
@@ -435,7 +417,6 @@
 - script:
     name: wait_current_deployment
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       n=0
       until [ $n -ge 60 ]
@@ -449,7 +430,6 @@
 
 - script:
     name: eth1_up
-    interpreter: /bin/bash -xe -s
     data: |
       ip link set eth1 up
       ip link list
@@ -472,7 +452,6 @@
 - script:
     name: stack_sh
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
       dig github.com
       cd /opt/stack
@@ -523,33 +502,24 @@
 - script:
     name: rally_functional
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
-      ${RCI_PYTHON:-python} -m pip freeze
+      RCI_PYTHON="/var/repos/openstack/rally/.venv/bin/${RCI_PYTHON}"
       export RCI_KEEP_DB=1
       source /var/repos/openstack-dev/devstack/openrc admin admin
       rally deployment create --name DEVSTACK --fromenv
       rally deployment check
       cd rally
+      $RCI_PYTHON -m pip freeze
       $RCI_PYTHON -m unittest discover tests/functional
       uptime
 
 - script:
-    name: rally_functional_pytest
+    name: unittests
     user: rally
-    interpreter: /bin/bash -xe -s
     data: |
-      RCI_PYTHON=${RCI_PYTHON:-python}
-      sudo $RCI_PYTHON -m pip install pytest-xdist pytest-html
-      $RCI_PYTHON -m pip freeze
-      export RCI_KEEP_DB=1
-      source /var/repos/openstack-dev/devstack/openrc admin admin
-      rally deployment create --name DEVSTACK --fromenv
-      rally deployment check
-      cd rally
-      $RCI_PYTHON -m pytest --html=results.html tests/functional
-      gzip -9 results.html
-      uptime
+      ${RCI_PYTHON:-python} -m pip freeze
+      cd /var/repos/$GERRIT_PROJECT
+      $RCI_PYTHON -m unittest discover $RCI_UNITTESTS_DIR
 
 - script:
     name: gzip_ds_logs
@@ -572,15 +542,6 @@
       chmod -R a+r /tmp/mos-logs
 
 - script:
-    name: unittests
-    user: rally
-    interpreter: /bin/bash -xe -s
-    data: |
-      ${RCI_PYTHON:-python} -m pip freeze
-      cd /var/repos/$GERRIT_PROJECT
-      $RCI_PYTHON -m unittest discover $RCI_UNITTESTS_DIR
-
-- script:
     name: show_git_log
     user: rally
     interpreter: /bin/bash -x -s
@@ -592,13 +553,13 @@
 - job:
     name: fuel-community-6.0
     env:
-      WITH_OPTIONAL_REQUIREMENTS: "true"
       RALLY_SCENARIO: "fuel"
       RCI_IP: "10.20.0.3/24"
       OS_AUTH_URL: "http://10.20.0.2:5000/v2.0/"
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
+      RCI_PYTHON: python3
     provider: ci4950
     vms:
       - name: u1404_rally_fuel
@@ -684,7 +645,8 @@
 - job:
     name: rally-dsvm-pg-py27-cli
     env:
-      RCI_PYTHON: /usr/bin/python2.7
+      RCI_PYTHON: python2.7
+      RALLY_POSTGRES: 1
     provider: ci4950
     vms:
       - name: u1404_dsvm_new
@@ -697,37 +659,15 @@
           - install_rally
           - create_deployment_devstack
           - wait_current_deployment
-          - init_rally_postgres
           - rally_functional
-        post:
-          - gzip_ds_logs
-
-- job:
-    name: rally-dsvm-pg-py34-cli-pytest
-    env:
-      RCI_PYTHON: /usr/bin/python3
-    provider: ci4950
-    vms:
-      - name: u1404_dsvm
-        publish:
-          - ["/opt/stack/logs", "devstack-logs"]
-          - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
-          - ["/home/rally/rally/results.html.gz", ""]
-        scripts:
-          - git_checkout
-          - stack_sh
-          - install_rally
-          - create_deployment_devstack
-          - wait_current_deployment
-          - init_rally_postgres
-          - rally_functional_pytest
         post:
           - gzip_ds_logs
 
 - job:
     name: rally-dsvm-pg-py34-cli
     env:
-      RCI_PYTHON: /usr/bin/python3
+      RCI_PYTHON: python3
+      RALLY_POSTGRES: 1
     provider: ci4950
     vms:
       - name: u1404_dsvm
@@ -740,7 +680,6 @@
           - install_rally
           - create_deployment_devstack
           - wait_current_deployment
-          - init_rally_postgres
           - rally_functional
         post:
           - gzip_ds_logs
@@ -770,6 +709,7 @@
     env:
       RCI_PYTHON: python2.7
       RCI_UNITTESTS_DIR: tests/unit
+      RALLY_POSTGRES: 1
       RALLY_UNITTEST_DB_URL: "postgresql:///rally?host=/var/run/postgresql"
     provider: ci4950
     vms:
@@ -777,7 +717,6 @@
         scripts:
           - git_checkout
           - install_rally
-          - init_rally_postgres
           - unittests
 
 - job:
@@ -835,10 +774,10 @@
     non-voting-jobs:
       - fuel-community-6.0
       - rally-dsvm-sahara
+      - rally-dsvm-pg-py27-cli
     jobs:
       - docker-check
       - rally-pg-py27-unit
       - rally-dsvm-pg-py34-cli
-      - rally-dsvm-pg-py27-cli
       - mos-7.0
       - mos-6.1
