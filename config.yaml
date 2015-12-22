@@ -754,6 +754,31 @@
           - git_checkout
           - show_git_log
 
+- script:
+    name: install_py26
+    data: |
+      add-apt-repository -y ppa:fkrull/deadsnakes
+      apt-get -y update
+      apt-get -y install python2.6 python2.6-dev
+      pip install tox
+
+- script:
+    name: run_tox_py26
+    user: rally
+    data: |
+      cd rally
+      tox -epy26
+
+- job:
+    name: tox-py26
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm
+        scripts:
+          - git_checkout
+          - install_py26
+          - run_tox_py26
+
 - matrix:
     name: test
     projects:
@@ -776,6 +801,7 @@
       - rally-dsvm-sahara
       - rally-dsvm-pg-py27-cli
     jobs:
+      - tox-py26
       - docker-check
       - rally-pg-py27-unit
       - rally-dsvm-pg-py34-cli
