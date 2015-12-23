@@ -362,6 +362,7 @@
       which rally
       rally deployment list
       cd rally
+      PATH=/var/repos/openstack/rally/.venv/bin:$PATH
       env
       /var/repos/openstack/rally/.venv/bin/$RCI_PYTHON -m pip freeze
       /var/repos/openstack/rally/.venv/bin/$RCI_PYTHON tests/ci/rally-gate.py
@@ -559,7 +560,7 @@
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
-      RCI_PYTHON: python3
+      RCI_PYTHON: python2.7
     provider: ci4950
     vms:
       - name: u1404_rally_fuel
