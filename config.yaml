@@ -802,7 +802,6 @@
       - rally-dsvm-sahara
       - rally-dsvm-pg-py27-cli
     jobs:
-      - tox-py26
       - docker-check
       - rally-pg-py27-unit
       - rally-dsvm-pg-py34-cli
