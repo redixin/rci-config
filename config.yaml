@@ -335,6 +335,19 @@
         sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
         $RCI_PYTHON -m pip install psycopg2
       fi
+      if [ -n "RALLY_MYSQL" ]; then
+        unset LANG
+        unset ${!LC_*}
+        echo "mysql-server mysql-server/root_password password r00tme" | debconf-set-selections
+        echo "mysql-server mysql-server/root_password_again password r00tme" | debconf-set-selections
+        apt-get --force-yes -y install mysql-server libmysqlclient-dev
+        mysql -u root -pr00tme -e "create database rally;"
+        mysql -u root -pr00tme -e "create user 'rally'@'localhost' identified by 'rally';"
+        mysql -u root -pr00tme -e "grant all on rally.* to 'rally'@'localhost';"
+
+        sed -i 's|#connection *=.*|connection=mysql://rally:rally@localhost/rally|' /etc/rally/rally.conf
+        $RCI_PYTHON -m pip install mysql-python
+      fi
       sudo -u rally /usr/local/bin/rally-manage db recreate
 
 - script:
@@ -705,6 +718,21 @@
           - unittests
 
 - job:
+    name: rally-mysql-py27-unit
+    env:
+      RCI_PYTHON: python2.7
+      RCI_UNITTESTS_DIR: tests/unit
+      RALLY_MYSQL: 1
+      RALLY_UNITTEST_DB_URL: "mysql://rally:rally@localhost/rally"
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm
+        scripts:
+          - git_checkout
+          - install_rally
+          - unittests
+
+- job:
     name: rally-dsvm-sahara
     env:
       WITH_SAHARA: 1
@@ -763,5 +791,6 @@
     jobs:
       - docker-check
       - rally-pg-py27-unit
+      - rally-mysql-py27-unit
       - rally-dsvm-pg-py34-cli
       - mos-7.0
