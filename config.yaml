@@ -326,7 +326,7 @@
       sed -i 's|^.*glance_image_create_timeout.*$|glance_image_create_timeout=600|' /etc/rally/rally.conf
       ln -s ${VENV}/bin/rally /usr/local/bin/
       ln -s ${VENV}/bin/rally-manage /usr/local/bin/
-      if [ -n ${RALLY_POSTGRES} ]; then
+      if [ -n "${RALLY_POSTGRES}" ]; then
         unset LANG
         unset ${!LC_*}
         apt-get --force-yes -y install postgresql
@@ -335,7 +335,7 @@
         sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
         $RCI_PYTHON -m pip install psycopg2
       fi
-      if [ -n ${RALLY_MYSQL} ]; then
+      if [ -n "${RALLY_MYSQL}" ]; then
         unset LANG
         unset ${!LC_*}
         echo "mysql-server mysql-server/root_password password r00tme" | debconf-set-selections
