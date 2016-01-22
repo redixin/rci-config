@@ -116,14 +116,16 @@
         memory: 4096
         net: ["brmos% 52:54:00:fa:11:03"]
       mos_7_0_1:
-        vcpu: 2
-        memory: 4096
+        vcpu: 4
+        memory: 6144
         net: ["brmos% 52:54:70:0a:11:01"]
       mos_7_0_2:
-        memory: 4096
+        vcpu: 2
+        memory: 6144
         net: ["brmos% 52:54:70:0a:11:02"]
       mos_7_0_3:
-        memory: 4096
+        vcpu: 2
+        memory: 6144
         net: ["brmos% 52:54:70:0a:11:03"]
 
 - script:
