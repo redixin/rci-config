@@ -342,7 +342,7 @@
         unset ${!LC_*}
         echo "mysql-server mysql-server/root_password password r00tme" | debconf-set-selections
         echo "mysql-server mysql-server/root_password_again password r00tme" | debconf-set-selections
-        apt-get --force-yes -y install mysql-server libmysqlclient-dev
+        apt-get update && apt-get --force-yes -y install mysql-server libmysqlclient-dev
         mysql -u root -pr00tme -e "create database rally;"
         mysql -u root -pr00tme -e "create user 'rally'@'localhost' identified by 'rally';"
         mysql -u root -pr00tme -e "grant all on rally.* to 'rally'@'localhost';"
