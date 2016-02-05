@@ -402,7 +402,12 @@
       EOF
       rally deployment create --name RCI --file /tmp/conf.json
       rally deployment config
-      wget http://10.1.1.1/fedora-23.x86_64.qcow2 -O fedora.qcow2 # FIXME
+
+- script:
+    name: upload_fedora
+    user: rally
+    data: |
+      wget http://10.1.1.1/fedora-23.x86_64.qcow2 -O fedora.qcow2 -q
       sudo pip install python-glanceclient
       glance image-create --name fedora --disk-format qcow2 --container-format bare --visibility public --file fedora.qcow2 --progress
       rm fedora.qcow2
@@ -608,6 +613,7 @@
           - install_rally
           - create_deployment_mos
           - wait_current_deployment
+          - upload_fedora
           - run_scenario
         post:
           - copy_mos_logs
