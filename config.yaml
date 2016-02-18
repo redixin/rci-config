@@ -331,7 +331,7 @@
       if [ -n "${RALLY_POSTGRES}" ]; then
         unset LANG
         unset ${!LC_*}
-        apt-get --force-yes -y install postgresql
+        apt-get update && apt-get --force-yes -y install postgresql
         sudo -i -u postgres createuser -s -d -r -l rally
         sudo -i -u postgres createdb --owner=rally rally
         sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
