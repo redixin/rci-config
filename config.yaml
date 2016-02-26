@@ -785,8 +785,6 @@
       - openstack-dev/ci-sandbox
     jobs:
       - test
-    non-voting-jobs:
-      - docker-check
     merged-jobs:
       - test
 
