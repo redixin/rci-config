@@ -498,6 +498,7 @@
       SWIFT_HASH=66a3d6b56c1f479c8b4e70ab5c2000f5
       SWIFT_REPLICAS=1
       SWIFT_DATA_DIR=$DEST/data
+      SAHARA_ENABLE_DISTRIBUTED_PERIODICS=False
       enable_plugin sahara git://git.openstack.org/openstack/sahara
       EOF
       fi
