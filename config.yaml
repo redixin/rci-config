@@ -505,7 +505,7 @@
       ./stack.sh > /tmp/stack.sh.log
       mv /tmp/stack.sh.log /opt/stack/logs
       echo "Devstack build finished with local.conf:"
-      cat local.conf
+      cat local.conf | tee /opt/stack/logs/local.conf.txt
 
 - script:
     name: rally_functional
