@@ -105,16 +105,6 @@
       fuel_community_60:
         memory: 4096
         net: ["brfuel% 52:54:00:c2:56:67"]
-      mos_6_1_1:
-        vcpu: 2
-        memory: 4096
-        net: ["brmos% 52:54:00:fa:11:01"]
-      mos_6_1_2:
-        memory: 4096
-        net: ["brmos% 52:54:00:fa:11:02"]
-      mos_6_1_3:
-        memory: 4096
-        net: ["brmos% 52:54:00:fa:11:03"]
       mos_7_0_1:
         vcpu: 4
         memory: 6144
@@ -127,6 +117,30 @@
         vcpu: 2
         memory: 6144
         net: ["brmos% 52:54:70:0a:11:03"]
+      mos_8_0_1:
+        vcpu: 4
+        memory: 6144
+        net: ["brmos% 52:54:43:0a:80:01"]
+      mos_8_0_2:
+        vcpu: 2
+        memory: 6144
+        net: ["brmos% 52:54:43:0a:80:02"]
+      mos_8_0_3:
+        vcpu: 2
+        memory: 6144
+        net: ["brmos% 52:54:43:0a:80:03"]
+      mos_8_0_1_ssl:
+        vcpu: 4
+        memory: 6144
+        net: ["brmos% 52:54:43:ca:80:01"]
+      mos_8_0_2_ssl:
+        vcpu: 2
+        memory: 6144
+        net: ["brmos% 52:54:43:ca:80:02"]
+      mos_8_0_3_ssl:
+        vcpu: 2
+        memory: 6144
+        net: ["brmos% 52:54:43:ca:80:03"]
 
 - script:
     name: init_u1404
@@ -620,25 +634,25 @@
           - copy_mos_logs
 
 - job:
-    name: mos-6.1
+    name: mos-8.0
     env:
       MOS_PUBLIC_VLAN: 100
-      MOS_MANAGEMENT_VLAN: 102
+      MOS_MANAGEMENT_VLAN: 101
       MOS_PRIVATE_VLAN: 103
       MOS_PUBLIC_IP: 172.16.0.1/24
-      MOS_MANAGEMENT_IP: 192.168.0.1/24
+      MOS_MANAGEMENT_IP: 192.168.0.254/24
       MOS_PRIVATE_IP: 192.168.2.1/24
       RCI_TASK: "rally-jobs/rally-mos.yaml"
-      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.4.1"}'
-      OS_AUTH_URL: "http://172.16.0.2:5000/v2.0/"
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"df6beb1f-834b-4205-ae45-e17020d1d382","external_router_id":"a4072b62-51f6-4a30-a677-1a4a1c02768e","sahara_service_type":"data-processing"}'
+      OS_AUTH_URL: "http://172.16.0.9:5000/v2.0/"
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
     provider: ci4950
     vms:
-      - name: mos_6_1_1
-      - name: mos_6_1_2
-      - name: mos_6_1_3
+      - name: mos_8_0_1
+      - name: mos_8_0_2
+      - name: mos_8_0_3
       - name: u1404_rally_mos
         publish:
           - ["/tmp/mos-logs", "mos-logs"]
@@ -649,6 +663,7 @@
           - install_rally
           - create_deployment_mos
           - wait_current_deployment
+          - upload_fedora
           - run_scenario
         post:
           - copy_mos_logs
@@ -799,6 +814,7 @@
       - fuel-community-6.0
       - rally-dsvm-sahara
       - rally-dsvm-pg-py27-cli
+      - mos-8.0
     jobs:
       - docker-check
       - rally-pg-py27-unit
