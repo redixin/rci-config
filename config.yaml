@@ -47,7 +47,7 @@
     name: ci4950
     module: rallyci.providers.virsh
     freemb: 1024
-    maxla: 23
+    maxla: 20
     hosts:
       - hostname: 10.1.1.1
         port: 16622
@@ -106,39 +106,39 @@
         memory: 4096
         net: ["brfuel% 52:54:00:c2:56:67"]
       mos_7_0_1:
-        vcpu: 4
+        vcpu: 2
         memory: 6144
         net: ["brmos% 52:54:70:0a:11:01"]
       mos_7_0_2:
-        vcpu: 2
+        vcpu: 1
         memory: 6144
         net: ["brmos% 52:54:70:0a:11:02"]
       mos_7_0_3:
-        vcpu: 2
+        vcpu: 1
         memory: 6144
         net: ["brmos% 52:54:70:0a:11:03"]
       mos_8_0_1:
-        vcpu: 4
+        vcpu: 2
         memory: 6144
         net: ["brmos% 52:54:43:0a:80:01"]
       mos_8_0_2:
-        vcpu: 2
+        vcpu: 1
         memory: 6144
         net: ["brmos% 52:54:43:0a:80:02"]
       mos_8_0_3:
-        vcpu: 2
+        vcpu: 1
         memory: 6144
         net: ["brmos% 52:54:43:0a:80:03"]
       mos_8_0_1_ssl:
-        vcpu: 4
+        vcpu: 2
         memory: 6144
         net: ["brmos% 52:54:43:ca:80:01"]
       mos_8_0_2_ssl:
-        vcpu: 2
+        vcpu: 1
         memory: 6144
         net: ["brmos% 52:54:43:ca:80:02"]
       mos_8_0_3_ssl:
-        vcpu: 2
+        vcpu: 1
         memory: 6144
         net: ["brmos% 52:54:43:ca:80:03"]
 
@@ -322,7 +322,35 @@
     data: |
       echo 'rally ALL=NOPASSWD:/usr/bin/docker push rallyforge*' > /etc/sudoers.d/rally-docker-push
       echo 'rally ALL=NOPASSWD:/usr/bin/docker build *' >> /etc/sudoers.d/rally-docker-push
-      
+
+- script:
+    name: install_mos_cert
+    interpreter: /bin/bash -x
+    data: |
+      CERT_DIR="/usr/local/share/ca-certificates/"
+      MOS_HOST=$(echo $OS_AUTH_URL | sed -n -e 's/^https:\/\/\(.*\):5000.*/\1/p')
+      echo "$MOS_IP $MOS_HOST" >> /etc/hosts
+      set -o pipefail
+      n=0
+      while true; do
+       n=$[$n+1]
+       if [ $n -ge 60 ]; then
+        echo "Timeout."
+        exit 255
+       fi
+       echo | openssl s_client -connect $MOS_IP:443 2>&1 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > ${CERT_DIR}/mos.crt
+       if [ "$?" -eq "1" ]; then
+        sleep 10
+       else
+        break
+       fi
+      done
+      HASH=$(openssl x509 -noout -hash -in "${CERT_DIR}/mos.crt")
+      ln -s "${CERT_DIR}/mos.crt" "/etc/ssl/certs/mos.pem"
+      ln -s "/etc/ssl/certs/mos.pem" "/etc/ssl/certs/${HASH}.0"
+      update-ca-certificates
+      curl -i https://mos80-ssl.fuel.local:5000/v2.0/
+
 - script:
     name: install_rally
     data: |
@@ -423,8 +451,15 @@
     data: |
       wget http://10.1.1.1/fedora-23.x86_64.qcow2 -O fedora.qcow2 -q
       sudo pip install python-glanceclient
-      glance image-create --name fedora --disk-format qcow2 --container-format bare --visibility public --file fedora.qcow2 --progress
+      glance --insecure image-create --name fedora --disk-format qcow2 --container-format bare --visibility public --file fedora.qcow2 --progress
       rm fedora.qcow2
+
+- script:
+    name: create_deployment_fromenv
+    user: rally
+    data: |
+      rally deployment create --name FROMENV --fromenv
+      rally deployment config
 
 - script:
     name: create_deployment_devstack
@@ -608,7 +643,7 @@
       MOS_MANAGEMENT_IP: 192.168.0.254/24
       MOS_PRIVATE_IP: 192.168.2.1/24
       RCI_TASK: "rally-jobs/rally-mos.yaml"
-      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.6.0"}'
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.6.0","external_net":"net04_ext","external_net_id":"9d477754-e9ba-4560-9b2b-9ce9d36638ce","external_router_id":"c497caa1-9d73-402b-bcd1-cc269e9af29e","sahara_service_type":"data_processing"}'
       OS_AUTH_URL: "http://172.16.0.3:5000/v2.0/"
       OS_USERNAME: admin
       OS_PASSWORD: admin
@@ -662,6 +697,44 @@
           - eth1_up
           - install_rally
           - create_deployment_mos
+          - wait_current_deployment
+          - upload_fedora
+          - run_scenario
+        post:
+          - copy_mos_logs
+
+- job:
+    name: mos-8.0-ssl
+    env:
+      MOS_PUBLIC_VLAN: 100
+      MOS_MANAGEMENT_VLAN: 101
+      MOS_PRIVATE_VLAN: 103
+      MOS_PUBLIC_IP: 172.16.0.1/24
+      MOS_MANAGEMENT_IP: 192.168.0.254/24
+      MOS_PRIVATE_IP: 192.168.2.1/24
+      MOS_IP: "172.16.0.6"
+      RCI_TASK: "rally-jobs/rally-mos.yaml"
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"df6beb1f-834b-4205-ae45-e17020d1d382","external_router_id":"a4072b62-51f6-4a30-a677-1a4a1c02768e","sahara_service_type":"data-processing"}'
+      OS_AUTH_URL: "https://mos80-ssl.fuel.local:5000/v2.0/"
+      OS_INSECURE: "True"
+      OS_USERNAME: admin
+      OS_PASSWORD: admin
+      OS_TENANT_NAME: admin
+    provider: ci4950
+    vms:
+      - name: mos_8_0_1_ssl
+      - name: mos_8_0_2_ssl
+      - name: mos_8_0_3_ssl
+      - name: u1404_rally_mos
+        publish:
+          - ["/tmp/mos-logs", "mos-logs"]
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
+        scripts:
+          - git_checkout
+          - eth1_up
+          - install_rally
+          - create_deployment_fromenv
+          - install_mos_cert
           - wait_current_deployment
           - upload_fedora
           - run_scenario
@@ -811,13 +884,14 @@
     merged-jobs:
       - docker-push
     non-voting-jobs:
-      - fuel-community-6.0
       - rally-dsvm-sahara
       - rally-dsvm-pg-py27-cli
-      - mos-8.0
+      - mos-8.0-ssl
     jobs:
+      - fuel-community-6.0
       - docker-check
       - rally-pg-py27-unit
       - rally-mysql-py27-unit
       - rally-dsvm-pg-py34-cli
       - mos-7.0
+      - mos-8.0
