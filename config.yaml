@@ -46,7 +46,7 @@
 - provider:
     name: ci4950
     module: rallyci.providers.virsh
-    freemb: 1024
+    freemb: 4096
     maxla: 20
     hosts:
       - hostname: 10.1.1.1
@@ -105,6 +105,9 @@
       fuel_community_60:
         memory: 4096
         net: ["brfuel% 52:54:00:c2:56:67"]
+      fuel_community_80:
+        memory: 4096
+        net: ["brfuel% 52:54:00:c2:56:80"]
       mos_7_0_1:
         vcpu: 2
         memory: 6144
@@ -634,6 +637,30 @@
       - name: fuel_community_60
 
 - job:
+    name: fuel-community-8.0
+    env:
+      RALLY_SCENARIO: "fuel"
+      RCI_IP: "10.20.0.3/24"
+      OS_AUTH_URL: "http://10.20.0.2:5000/v2.0/"
+      OS_USERNAME: admin
+      OS_PASSWORD: admin
+      OS_TENANT_NAME: admin
+      RCI_PYTHON: python2.7
+    provider: ci4950
+    vms:
+      - name: u1404_rally_fuel
+        scripts:
+          - git_checkout
+          - install_rally
+          - eth1_up
+          - create_deployment_mos
+          - wait_current_deployment
+          - rally_gate
+        publish:
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
+      - name: fuel_community_80
+
+- job:
     name: mos-7.0
     env:
       MOS_PUBLIC_VLAN: 100
@@ -672,11 +699,11 @@
     name: mos-8.0
     env:
       MOS_PUBLIC_VLAN: 100
-      MOS_MANAGEMENT_VLAN: 101
-      MOS_PRIVATE_VLAN: 103
+      MOS_MANAGEMENT_VLAN: 102
+      MOS_PRIVATE_VLAN: 101
       MOS_PUBLIC_IP: 172.16.0.1/24
-      MOS_MANAGEMENT_IP: 192.168.0.254/24
-      MOS_PRIVATE_IP: 192.168.2.1/24
+      MOS_MANAGEMENT_IP: 192.168.2.254/24
+      MOS_PRIVATE_IP: 192.168.0.253/24
       RCI_TASK: "rally-jobs/rally-mos.yaml"
       RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"df6beb1f-834b-4205-ae45-e17020d1d382","external_router_id":"a4072b62-51f6-4a30-a677-1a4a1c02768e","sahara_service_type":"data-processing"}'
       OS_AUTH_URL: "http://172.16.0.9:5000/v2.0/"
@@ -714,7 +741,7 @@
       MOS_PRIVATE_IP: 192.168.2.1/24
       MOS_IP: "172.16.0.6"
       RCI_TASK: "rally-jobs/rally-mos.yaml"
-      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"df6beb1f-834b-4205-ae45-e17020d1d382","external_router_id":"a4072b62-51f6-4a30-a677-1a4a1c02768e","sahara_service_type":"data-processing"}'
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"ef029217-485b-43fb-83ea-6de1f5119f26","external_router_id":"1efd7019-ebe8-4247-8440-f22f92df80a1","sahara_service_type":"data-processing"}'
       OS_AUTH_URL: "https://mos80-ssl.fuel.local:5000/v2.0/"
       OS_INSECURE: "True"
       OS_USERNAME: admin
@@ -887,6 +914,7 @@
       - rally-dsvm-sahara
       - rally-dsvm-pg-py27-cli
       - mos-8.0-ssl
+      - fuel-community-8.0
     jobs:
       - fuel-community-6.0
       - docker-check
