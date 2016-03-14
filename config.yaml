@@ -430,25 +430,6 @@
       rally --rally-debug task sla_check
 
 - script:
-    name: create_deployment_mos
-    user: rally
-    data: |
-      rally-manage db recreate
-      cat <<EOF > /tmp/conf.json
-      {   
-          "type": "ExistingCloud",
-          "auth_url": "$OS_AUTH_URL",
-          "admin": {
-              "username": "$OS_USERNAME",
-              "password": "$OS_PASSWORD",
-              "tenant_name": "$OS_TENANT_NAME"
-          }
-      }
-      EOF
-      rally deployment create --name RCI --file /tmp/conf.json
-      rally deployment config
-
-- script:
     name: upload_fedora
     user: rally
     data: |
@@ -629,7 +610,7 @@
           - git_checkout
           - install_rally
           - eth1_up
-          - create_deployment_mos
+          - create_deployment_fromenv
           - wait_current_deployment
           - rally_gate
         publish:
@@ -653,7 +634,7 @@
           - git_checkout
           - install_rally
           - eth1_up
-          - create_deployment_mos
+          - create_deployment_fromenv
           - wait_current_deployment
           - rally_gate
         publish:
@@ -688,7 +669,7 @@
           - git_checkout
           - eth1_up
           - install_rally
-          - create_deployment_mos
+          - create_deployment_fromenv
           - wait_current_deployment
           - upload_fedora
           - run_scenario
@@ -723,7 +704,7 @@
           - git_checkout
           - eth1_up
           - install_rally
-          - create_deployment_mos
+          - create_deployment_fromenv
           - wait_current_deployment
           - upload_fedora
           - run_scenario
