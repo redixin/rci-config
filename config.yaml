@@ -24,7 +24,7 @@
     cfg-url-template: https://review.openstack.org/gitweb?p={project}.git;a=blob_plain;f=.rally-ci.yaml;hb={commit}
     cr-url-template: https://review.openstack.org/#q,{commit},n,z
     commit-url-template: http://git.openstack.org/cgit/{project}/commit/?id={commit}
-    comment-job-template: "- {name} https://rally-ci.tk/logs/{log_path}/ : {success} in {time}"
+    comment-job-template: "- {name} http://r-ci.tk/logs/{log_path}/ : {success} in {time}"
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
 
@@ -433,10 +433,10 @@
     name: upload_fedora
     user: rally
     data: |
-      wget http://10.1.1.1/fedora-23.x86_64.qcow2 -O fedora.qcow2 -q
-      sudo pip install python-glanceclient
-      glance --insecure image-create --name fedora --disk-format qcow2 --container-format bare --visibility public --file fedora.qcow2 --progress
-      rm fedora.qcow2
+      wget http://10.1.1.1/fedora-23.x86_64.qcow2 -q
+      sudo pip install python-openstackclient
+      openstack image create fedora-2 --file fedora-23.x86_64.qcow2 --public --container-format bare --insecure
+      rm fedora-23.x86_64.qcow2
 
 - script:
     name: create_deployment_fromenv
@@ -528,6 +528,9 @@
       cat >> local.conf <<EOF
       enable_service s-proxy s-object s-container s-account
       enable_service h-eng h-api h-api-cfn h-api-cw heat # heat
+      SWIFT_LOOPBACK_DISK_SIZE=6G
+      SWIFT_LOOPBACK_DISK_SIZE=5368709122 # 5G
+      SWIFT_MAX_FILE_SIZE=4294967296 # 4G
       SWIFT_HASH=66a3d6b56c1f479c8b4e70ab5c2000f5
       SWIFT_REPLICAS=1
       SWIFT_DATA_DIR=$DEST/data
@@ -750,7 +753,48 @@
           - copy_mos_logs
 
 - job:
+    name: mos-8.0-ssl-v3
+    env:
+      MOS_PUBLIC_VLAN: 100
+      MOS_MANAGEMENT_VLAN: 101
+      MOS_PRIVATE_VLAN: 103
+      MOS_PUBLIC_IP: 172.16.0.1/24
+      MOS_MANAGEMENT_IP: 192.168.0.254/24
+      MOS_PRIVATE_IP: 192.168.2.1/24
+      MOS_IP: "172.16.0.6"
+      RCI_TASK: "rally-jobs/rally-mos.yaml"
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"ef029217-485b-43fb-83ea-6de1f5119f26","sahara_service_type":"data-processing","keystone_version":"v3"}'
+      OS_IDENTITY_API_VERSION: 3
+      OS_AUTH_URL: "https://mos80-ssl.fuel.local:5000/v3/"
+      OS_INSECURE: "True"
+      OS_USERNAME: admin
+      OS_PASSWORD: admin
+      OS_PROJECT_NAME: admin
+      OS_TENANT_NAME: admin
+    provider: ci4950
+    vms:
+      - name: mos_8_0_1_ssl
+      - name: mos_8_0_2_ssl
+      - name: mos_8_0_3_ssl
+      - name: u1404_rally_mos
+        publish:
+          - ["/tmp/mos-logs", "mos-logs"]
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
+        scripts:
+          - git_checkout
+          - eth1_up
+          - install_rally
+          - create_deployment_fromenv
+          - install_mos_cert
+          - wait_current_deployment
+          - upload_fedora
+          - run_scenario
+        post:
+          - copy_mos_logs
+
+- job:
     name: rally-dsvm-pg-py27-cli
+    timeout: 120
     env:
       RCI_PYTHON: python2.7
       RALLY_POSTGRES: 1
@@ -772,6 +816,7 @@
 
 - job:
     name: rally-dsvm-pg-py34-cli
+    timeout: 120
     env:
       RCI_PYTHON: python3
       RALLY_POSTGRES: 1
@@ -886,6 +931,13 @@
       - test
 
 - matrix:
+    name: sahara
+    projects:
+      - openstack/sahara
+    non-voting-jobs:
+      - rally-dsvm-sahara
+
+- matrix:
     name: rally
     projects:
       - openstack/rally
@@ -894,13 +946,13 @@
     non-voting-jobs:
       - rally-dsvm-sahara
       - rally-dsvm-pg-py27-cli
-      - mos-8.0-ssl
-      - fuel-community-8.0
+      - rally-dsvm-pg-py34-cli
+      - mos-8.0-ssl-v3
     jobs:
       - fuel-community-6.0
       - docker-check
       - rally-pg-py27-unit
       - rally-mysql-py27-unit
-      - rally-dsvm-pg-py34-cli
       - mos-7.0
       - mos-8.0
+      - mos-8.0-ssl
