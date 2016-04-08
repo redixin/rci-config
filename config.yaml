@@ -90,7 +90,7 @@
         image: u1404_dsvm
         net: ["br5"]
       u1404_dsvm_big:
-        memory: 10240
+        memory: 8192
         vcpu: 2
         image: u1404_dsvm
         net: ["br5"]
@@ -109,40 +109,40 @@
         memory: 4096
         net: ["brfuel% 52:54:00:c2:56:80"]
       mos_7_0_1:
-        vcpu: 3
-        memory: 7144
+        vcpu: 4
+        memory: 8144
         net: ["brmos% 52:54:70:0a:11:01"]
       mos_7_0_2:
         vcpu: 2
-        memory: 7144
+        memory: 4144
         net: ["brmos% 52:54:70:0a:11:02"]
       mos_7_0_3:
         vcpu: 2
-        memory: 7144
+        memory: 4144
         net: ["brmos% 52:54:70:0a:11:03"]
       mos_8_0_1:
-        vcpu: 3
-        memory: 7144
+        vcpu: 4
+        memory: 8144
         net: ["brmos% 52:54:43:0a:80:01"]
       mos_8_0_2:
         vcpu: 2
-        memory: 7144
+        memory: 4144
         net: ["brmos% 52:54:43:0a:80:02"]
       mos_8_0_3:
         vcpu: 2
-        memory: 7144
+        memory: 4144
         net: ["brmos% 52:54:43:0a:80:03"]
       mos_8_0_1_ssl:
         vcpu: 3
-        memory: 7144
+        memory: 8144
         net: ["brmos% 52:54:43:ca:80:01"]
       mos_8_0_2_ssl:
         vcpu: 2
-        memory: 7144
+        memory: 4144
         net: ["brmos% 52:54:43:ca:80:02"]
       mos_8_0_3_ssl:
         vcpu: 2
-        memory: 7144
+        memory: 4144
         net: ["brmos% 52:54:43:ca:80:03"]
 
 - script:
@@ -437,7 +437,7 @@
       md5sum fedora-23.x86_64.qcow2
       sudo pip install python-openstackclient
       openstack image list --insecure
-      openstack image create fedora --file fedora-23.x86_64.qcow2 --public --container-format bare --insecure
+      openstack image create fedora --disk-format qcow2 --file fedora-23.x86_64.qcow2 --public --container-format bare --insecure
       rm fedora-23.x86_64.qcow2
 
 - script:
@@ -585,6 +585,7 @@
       for ip in $MOS_NODES; do
           mkdir /tmp/mos-logs/$ip
           sshpass -p r00tme scp -o 'StrictHostKeyChecking no' root@$ip:/var/log/*-all.log /tmp/mos-logs/$ip
+          sshpass -p r00tme scp -o 'StrictHostKeyChecking no' root@$ip:/var/log/ceph/*.log /tmp/mos-logs/$ip
           gzip -9 /tmp/mos-logs/$ip/*
       done
       chmod -R a+r /tmp/mos-logs
@@ -937,28 +938,22 @@
       - test
 
 - matrix:
-    name: sahara
-    projects:
-      - openstack/sahara
-    non-voting-jobs:
-      - rally-dsvm-sahara
-
-- matrix:
     name: rally
     projects:
       - openstack/rally
     merged-jobs:
       - docker-push
     non-voting-jobs:
+      - fuel-community-6.0
       - rally-dsvm-sahara
+    optional-jobs:
+      - mos-8.0-ssl
+    jobs:
+      - docker-check
       - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
-      - mos-8.0-ssl-v3
-    jobs:
-      - fuel-community-6.0
-      - docker-check
       - rally-pg-py27-unit
       - rally-mysql-py27-unit
       - mos-7.0
       - mos-8.0
-      - mos-8.0-ssl
+      - mos-8.0-ssl-v3
