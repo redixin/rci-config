@@ -96,11 +96,11 @@
         net: ["br5"]
       u1404_rally_fuel:
         memory: 1024
-        image: u1404_dev
+        image: u1404_dsvm
         net: ["br5", "brfuel%"]
       u1404_rally_mos:
         memory: 1024
-        image: u1404_dev
+        image: u1404_dsvm
         net: ["br5", "brmos%"]
       fuel_community_60:
         memory: 4096
