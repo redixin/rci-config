@@ -28,7 +28,7 @@
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
 
-      See status at: https://rally-ci.tk/
+      See status at: https://r-ci.tk/
     recheck-regexp: ^rally-ci recheck$
     env:
       GERRIT_PROJECT: change.project
@@ -60,10 +60,16 @@
     images:
       u1404:
         url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
+      u1604:
+        url: http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
       u1404_dev:
         parent: u1404
         build-net: "br5"
-        build-scripts: ["init_u1404", "clone_projects"]
+        build-scripts: ["init_ubuntu", "clone_projects"]
+      u1604_dev:
+        parent: u1604
+        build-net: "br5"
+        build-scripts: ["init_ubuntu", "clone_projects"]
       u1404_docker:
         parent: u1404_dev
         build-net: "br5"
@@ -74,6 +80,10 @@
         build-scripts: ["install_docker_push"]
       u1404_dsvm:
         parent: u1404_dev
+        build-net: "br5"
+        build-scripts: ["install_deps"]
+      u1604_dsvm:
+        parent: u1604_dev
         build-net: "br5"
         build-scripts: ["install_deps"]
     vms:
@@ -101,6 +111,10 @@
       u1404_rally_mos:
         memory: 1024
         image: u1404_dsvm
+        net: ["br5", "brmos%"]
+      u1604_rally_mos:
+        memory: 1024
+        image: u1604_dsvm
         net: ["br5", "brmos%"]
       fuel_community_60:
         memory: 4096
@@ -146,16 +160,16 @@
         net: ["brmos% 52:54:43:ca:80:03"]
 
 - script:
-    name: init_u1404
+    name: init_ubuntu
     data: |
       sleep 16
       apt-get update && apt-get --force-yes -y upgrade
-      apt-get --force-yes -y install git python2.7 bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev libssl-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass python3-dev
-      apt-get remove --force-yes -y cloud-init
+      apt-get --force-yes -y install git bash-completion build-essential python-dev libffi-dev libxml2-dev libxslt1-dev libssl-dev libpq-dev libmysqlclient-dev sudo wget libkrb5-dev libsqlite3-dev libldap2-dev libsasl2-dev libvirt-dev sshpass python3-dev liberasurecode-dev
+      apt-get remove --force-yes -y cloud-init python-requests
       #
-      wget https://raw.github.com/pypa/pip/master/contrib/get-pip.py -O /tmp/gp.py
-      python3 /tmp/gp.py
-      python /tmp/gp.py &
+      wget https://bootstrap.pypa.io/get-pip.py -O /tmp/gp.py
+      python2 /tmp/gp.py &
+      python3 /tmp/gp.py &
       #
       useradd -u 65510 -m rally || true
       chsh rally -s /bin/bash
@@ -164,6 +178,9 @@
       echo 'rally ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rally-42
       mkdir -p /home/rally/.ssh
       cat /root/.ssh/authorized_keys >> /home/rally/.ssh/authorized_keys
+      wait
+      python2 -m pip install virtualenv &
+      python3 -m pip install virtualenv &
       wait
 
 - script:
@@ -206,12 +223,13 @@
     name: install_deps
     data: |
       apt-get update && apt-get --force-yes -y upgrade
-      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb python-numpy qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client libjpeg-dev
+      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client libjpeg-dev
       #
-      egrep -v 'monasca|marconiclient|pyngus|openstackclient' /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
       rm -fr /root/.cache/pip
+      python2 -m pip install pytest-xdist pytest-html numpy extras docutils
+      #egrep -v 'monasca|marconiclient|pyngus|openstackclient' 
+      cat /var/repos/openstack/requirements/global-requirements.txt > /tmp/gr.txt
       python2 -m pip install -r /tmp/gr.txt
-      python2 -m pip install pytest-xdist pytest-html numpy
 
 - script:
     name: git_checkout
@@ -349,10 +367,10 @@
        fi
       done
       HASH=$(openssl x509 -noout -hash -in "${CERT_DIR}/mos.crt")
-      ln -s "${CERT_DIR}/mos.crt" "/etc/ssl/certs/mos.pem"
-      ln -s "/etc/ssl/certs/mos.pem" "/etc/ssl/certs/${HASH}.0"
-      update-ca-certificates
-      curl -i https://mos80-ssl.fuel.local:5000/v2.0/
+      #ln -s "${CERT_DIR}/mos.crt" "/etc/ssl/certs/mos.pem"
+      #ln -s "/etc/ssl/certs/mos.pem" "/etc/ssl/certs/${HASH}.0"
+      #update-ca-certificates
+      #curl -i https://mos80-ssl.fuel.local:5000/v2.0/
 
 - script:
     name: install_rally
@@ -361,7 +379,7 @@
       VENV=${RALLY_DIR}/.venv
       RCI_PYTHON=${RCI_PYTHON:-python}
       cd $RALLY_DIR
-      apt-get -y install python-virtualenv && virtualenv $VENV -p $RCI_PYTHON
+      virtualenv $VENV -p $RCI_PYTHON
       RCI_PYTHON=${VENV}/bin/python
       sudo rm -fr /root/.cache/pip
       $RCI_PYTHON -m pip install -r requirements.txt -r test-requirements.txt -r optional-requirements.txt
@@ -391,7 +409,6 @@
         mysql -u root -pr00tme -e "create database rally;"
         mysql -u root -pr00tme -e "create user 'rally'@'localhost' identified by 'rally';"
         mysql -u root -pr00tme -e "grant all on rally.* to 'rally'@'localhost';"
-
         sed -i 's|#connection *=.*|connection=mysql://rally:rally@localhost/rally|' /etc/rally/rally.conf
         $RCI_PYTHON -m pip install mysql-python
       fi
@@ -464,7 +481,7 @@
       do  
           n=$[$n+1]
           sleep 10
-          rally deployment check 2> /dev/null && exit 0
+          rally -v deployment check && exit 0
       done
       echo "Timeout waiting for cloud"
       exit 255
@@ -557,16 +574,17 @@
       rally deployment check
       cd rally
       $RCI_PYTHON -m pip freeze
-      $RCI_PYTHON -m unittest discover tests/functional
+      $RCI_PYTHON -m unittest discover -v -s tests/functional
       uptime
 
 - script:
     name: unittests
     user: rally
     data: |
+      sudo ${RCI_PYTHON:-python} -m pip install -r /var/repos/$GERRIT_PROJECT/test-requirements.txt
       ${RCI_PYTHON:-python} -m pip freeze
       cd /var/repos/$GERRIT_PROJECT
-      $RCI_PYTHON -m unittest discover $RCI_UNITTESTS_DIR
+      $RCI_PYTHON -m unittest discover -v -s $RCI_UNITTESTS_DIR
       uptime
 
 - script:
@@ -733,7 +751,7 @@
       RCI_TASK: "rally-jobs/rally-mos.yaml"
       RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"ef029217-485b-43fb-83ea-6de1f5119f26","external_router_id":"1efd7019-ebe8-4247-8440-f22f92df80a1","sahara_service_type":"data-processing"}'
       OS_AUTH_URL: "https://mos80-ssl.fuel.local:5000/v2.0/"
-      OS_INSECURE: "True"
+      OS_CACERT: "/usr/local/share/ca-certificates/mos.crt"
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_TENANT_NAME: admin
@@ -773,11 +791,13 @@
       RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"ef029217-485b-43fb-83ea-6de1f5119f26","sahara_service_type":"data-processing","keystone_version":"v3"}'
       OS_IDENTITY_API_VERSION: 3
       OS_AUTH_URL: "https://mos80-ssl.fuel.local:5000/v3/"
-      OS_INSECURE: "True"
+      OS_CACERT: "/usr/local/share/ca-certificates/mos.crt"
       OS_USERNAME: admin
       OS_PASSWORD: admin
       OS_PROJECT_NAME: admin
       OS_TENANT_NAME: admin
+      OS_PROJECT_DOMAIN_NAME: Default
+      OS_USER_DOMAIN_NAME: Default
     provider: ci4950
     vms:
       - name: mos_8_0_1_ssl
@@ -944,16 +964,16 @@
     merged-jobs:
       - docker-push
     non-voting-jobs:
-      - fuel-community-6.0
       - rally-dsvm-sahara
+      - mos-8.0-ssl-v3
     optional-jobs:
+      - fuel-community-6.0
       - mos-8.0-ssl
+      - mos-7.0
     jobs:
       - docker-check
       - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
+      - mos-8.0
       - rally-pg-py27-unit
       - rally-mysql-py27-unit
-      - mos-7.0
-      - mos-8.0
-      - mos-8.0-ssl-v3
