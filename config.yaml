@@ -367,10 +367,10 @@
        fi
       done
       HASH=$(openssl x509 -noout -hash -in "${CERT_DIR}/mos.crt")
-      #ln -s "${CERT_DIR}/mos.crt" "/etc/ssl/certs/mos.pem"
-      #ln -s "/etc/ssl/certs/mos.pem" "/etc/ssl/certs/${HASH}.0"
-      #update-ca-certificates
-      #curl -i https://mos80-ssl.fuel.local:5000/v2.0/
+      ln -s "${CERT_DIR}/mos.crt" "/etc/ssl/certs/mos.pem"
+      ln -s "/etc/ssl/certs/mos.pem" "/etc/ssl/certs/${HASH}.0"
+      update-ca-certificates
+      curl -i https://mos80-ssl.fuel.local:5000/v2.0/
 
 - script:
     name: install_rally
@@ -469,6 +469,8 @@
     user: rally
     data: |
       source /var/repos/openstack-dev/devstack/openrc admin admin
+      env
+      env | grep OS_
       rally deployment create --name DSVM --fromenv
       rally deployment config
 
@@ -582,6 +584,7 @@
     user: rally
     data: |
       sudo ${RCI_PYTHON:-python} -m pip install -r /var/repos/$GERRIT_PROJECT/test-requirements.txt
+      sudo ${RCI_PYTHON:-python} -m pip install -r /var/repos/$GERRIT_PROJECT/requirements.txt
       ${RCI_PYTHON:-python} -m pip freeze
       cd /var/repos/$GERRIT_PROJECT
       $RCI_PYTHON -m unittest discover -v -s $RCI_UNITTESTS_DIR
@@ -965,15 +968,15 @@
       - docker-push
     non-voting-jobs:
       - rally-dsvm-sahara
-      - mos-8.0-ssl-v3
+      - mos-8.0-ssl
     optional-jobs:
       - fuel-community-6.0
-      - mos-8.0-ssl
       - mos-7.0
     jobs:
       - docker-check
       - rally-dsvm-pg-py27-cli
       - rally-dsvm-pg-py34-cli
       - mos-8.0
+      - mos-8.0-ssl-v3
       - rally-pg-py27-unit
       - rally-mysql-py27-unit
