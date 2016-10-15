@@ -23,7 +23,7 @@
     silent: false
     cfg-url-template: https://review.openstack.org/gitweb?p={project}.git;a=blob_plain;f=.rally-ci.yaml;hb={commit}
     cr-url-template: https://review.openstack.org/#q,{commit},n,z
-    commit-url-template: http://git.openstack.org/cgit/{project}/commit/?id={commit}
+    commit-url-template: https://github.com/{project}/commit/{commit}
     comment-job-template: "- {name} http://r-ci.tk/logs/{log_path}/ : {success} in {time}"
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
@@ -60,10 +60,16 @@
     images:
       u1404:
         url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
+      u1404_2:
+        url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
       u1604:
         url: http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
       u1404_dev:
         parent: u1404
+        build-net: "br5"
+        build-scripts: ["init_ubuntu", "clone_projects"]
+      u1404_dev_2:
+        parent: u1404_2
         build-net: "br5"
         build-scripts: ["init_ubuntu", "clone_projects"]
       u1604_dev:
@@ -82,11 +88,20 @@
         parent: u1404_dev
         build-net: "br5"
         build-scripts: ["install_deps"]
+      u1404_dsvm_2:
+        parent: u1404_dev_2
+        build-net: "br5"
+        build-scripts: ["install_deps"]
       u1604_dsvm:
         parent: u1604_dev
         build-net: "br5"
         build-scripts: ["install_deps"]
     vms:
+      u1604_dsvm:
+        vcpu: 2
+        memory: 4096
+        image: u1604_dsvm
+        net: ["br5"]
       custom_u1404_docker_push:
         memory: 1024
         net: ["br5"]
@@ -98,6 +113,11 @@
         vcpu: 2
         memory: 4096
         image: u1404_dsvm
+        net: ["br5"]
+      u1404_dsvm_2:
+        vcpu: 2
+        memory: 4096
+        image: u1404_dsvm_2
         net: ["br5"]
       u1404_dsvm_big:
         memory: 8192
@@ -146,6 +166,18 @@
         vcpu: 2
         memory: 4144
         net: ["brmos% 52:54:43:0a:80:03"]
+      mos_9_0_1:
+        vcpu: 4
+        memory: 8144
+        net: ["brmos% 52:54:23:0a:90:01"]
+      mos_9_0_2:
+        vcpu: 2
+        memory: 4144
+        net: ["brmos% 52:54:23:0a:90:02"]
+      mos_9_0_3:
+        vcpu: 2
+        memory: 4144
+        net: ["brmos% 52:54:23:0a:90:03"]
       mos_8_0_1_ssl:
         vcpu: 3
         memory: 8144
@@ -212,7 +244,7 @@
         p=$(echo $proj | cut -d '/' -f 2)
         mkdir -p $org
         cd $org
-        git clone "http://git.openstack.org/$proj.git"
+        git clone "git://git.openstack.org/$proj.git"
         ln -s /var/repos/$proj /opt/stack/$p
         cd ..
       done
@@ -250,6 +282,7 @@
       }
       PROJECT=${GERRIT_PROJECT:-$GERRIT_REFUPD_PROJECT}
       cd "/var/repos/$PROJECT"
+      #git remote set-url origin git://github.com/$PROJECT
       git checkout master && git pull
       if [ -n "$GERRIT_REF" ]; then
           retry git fetch https://review.openstack.org/$PROJECT $GERRIT_REF
@@ -270,8 +303,10 @@
       mkdir /tmp/rv
       sudo chown 65500 /tmp/rv
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally-manage db recreate
+      docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment create --name EX --file /opt/rally/samples/deployments/existing.json
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment list
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally version
+      docker run -v /tmp/rv:/home/rally rallyforge/rally rally verify install
 
 - script:
     name: pull_ubuntu_1404
@@ -519,6 +554,7 @@
       cd /opt/stack
       for d in $(ls); do
         pushd $d
+        #sed -i 's|http://git.openstack.org|git://github.com|' .git/config
         git pull || true
         sleep 1
         popd
@@ -532,6 +568,7 @@
       DATABASE_PASSWORD=admin
       RABBIT_PASSWORD=admin
       SERVICE_PASSWORD=admin
+      FIXED_RANGE="10.0.0.0/24"
       SERVICE_TOKEN=a862f596-76f3-21e3-b3b2-e716f9080d51
       disable_service zookeeper
       disable_service tempest
@@ -823,8 +860,66 @@
           - copy_mos_logs
 
 - job:
+    name: mos-9.0
+    env:
+      MOS_NODES: "10.20.0.3 10.20.0.4 10.20.0.5"
+      MOS_PUBLIC_VLAN: 100
+      MOS_MANAGEMENT_VLAN: 102
+      MOS_PRIVATE_VLAN: 101
+      MOS_PUBLIC_IP: 172.16.0.1/24
+      MOS_MANAGEMENT_IP: 192.168.2.254/24
+      MOS_PRIVATE_IP: 192.168.0.253/24
+      RCI_TASK: "rally-jobs/rally-mos.yaml"
+      RCI_TASK_ARGS: '{"sahara_hadoop_version":"2.7.1","external_net":"admin_floating_net","external_net_id":"df6beb1f-834b-4205-ae45-e17020d1d382","external_router_id":"a4072b62-51f6-4a30-a677-1a4a1c02768e","sahara_service_type":"data-processing"}'
+      OS_AUTH_URL: "http://172.16.0.3:5000/v2.0/"
+      OS_USERNAME: admin
+      OS_PASSWORD: admin
+      OS_TENANT_NAME: admin
+    provider: ci4950
+    vms:
+      - name: mos_9_0_1
+      - name: mos_9_0_2
+      - name: mos_9_0_3
+      - name: u1404_rally_mos
+        publish:
+          - ["/tmp/mos-logs", "mos-logs"]
+          - ["/home/rally/rally/rally-plot", "rally-plot"]
+        scripts:
+          - git_checkout
+          - eth1_up
+          - install_rally
+          - create_deployment_fromenv
+          - wait_current_deployment
+          - upload_fedora
+          - run_scenario
+        post:
+          - copy_mos_logs
+
+- job:
+    name: rally-dsvm-pg-py27-cli-new
+    timeout: 180
+    env:
+      RCI_PYTHON: python2.7
+      RALLY_POSTGRES: 1
+    provider: ci4950
+    vms:
+      - name: u1404_dsvm_2
+        publish:
+          - ["/opt/stack/logs", "devstack-logs"]
+          - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
+        scripts:
+          - git_checkout
+          - stack_sh
+          - install_rally
+          - create_deployment_devstack
+          - wait_current_deployment
+          - rally_functional
+        post:
+          - gzip_ds_logs
+
+- job:
     name: rally-dsvm-pg-py27-cli
-    timeout: 120
+    timeout: 180
     env:
       RCI_PYTHON: python2.7
       RALLY_POSTGRES: 1
@@ -946,7 +1041,7 @@
     vms:
       - name: u1404_dsvm
         publish:
-          - ["/home/rally", "test-logs"]
+          - ["/home/rally/doc", "test-logs"]
         scripts:
           - git_checkout
           - show_git_log
@@ -969,6 +1064,7 @@
     non-voting-jobs:
       - rally-dsvm-sahara
       - mos-8.0-ssl
+      - mos-9.0
     optional-jobs:
       - fuel-community-6.0
       - mos-7.0
