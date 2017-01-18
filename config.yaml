@@ -111,7 +111,7 @@
         net: ["br5"]
       u1404_dsvm:
         vcpu: 2
-        memory: 4096
+        memory: 5096
         image: u1404_dsvm
         net: ["br5"]
       u1404_dsvm_2:
@@ -306,7 +306,7 @@
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment create --name EX --file /opt/rally/samples/deployments/existing.json
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally deployment list
       docker run -v /tmp/rv:/home/rally rallyforge/rally rally version
-      docker run -v /tmp/rv:/home/rally rallyforge/rally rally verify install
+      #docker run -v /tmp/rv:/home/rally rallyforge/rally rally verify install
 
 - script:
     name: pull_ubuntu_1404
@@ -1062,7 +1062,6 @@
     merged-jobs:
       - docker-push
     non-voting-jobs:
-      - rally-dsvm-sahara
       - mos-8.0-ssl
       - mos-9.0
     optional-jobs:
