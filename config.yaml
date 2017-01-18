@@ -606,14 +606,14 @@
     name: rally_functional
     user: rally
     data: |
-      RCI_PYTHON="/var/repos/openstack/rally/.venv/bin/${RCI_PYTHON}"
-      export RCI_KEEP_DB=1
       source /var/repos/openstack-dev/devstack/openrc admin admin
       rally deployment create --name DEVSTACK --fromenv
       rally deployment check
       cd rally
-      $RCI_PYTHON -m pip freeze
-      $RCI_PYTHON -m unittest discover -v -s tests/functional
+      . /var/repos/openstack/rally/.venv/bin/activate
+      export RCI_KEEP_DB=1
+      python -m pip freeze
+      python -m unittest discover -v -s tests/functional
       uptime
 
 - script:
