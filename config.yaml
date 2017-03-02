@@ -62,8 +62,6 @@
         url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
       u1404_2:
         url: http://cloud-images.ubuntu.com/trusty/current/trusty-server-cloudimg-amd64-disk1.img
-      u1604:
-        url: http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
       u1404_dev:
         parent: u1404
         build-net: "br5"
@@ -99,7 +97,7 @@
     vms:
       u1604_dsvm:
         vcpu: 2
-        memory: 4096
+        memory: 8096
         image: u1604_dsvm
         net: ["br5"]
       custom_u1404_docker_push:
@@ -239,11 +237,13 @@
       openstack/requirements \
       openstack-dev/ci-sandbox \
       openstack-dev/devstack"
+      echo $projects
       for proj in $projects; do
         org=$(echo $proj | cut -d '/' -f 1)
         p=$(echo $proj | cut -d '/' -f 2)
         mkdir -p $org
         cd $org
+        echo $proj
         git clone "git://git.openstack.org/$proj.git"
         ln -s /var/repos/$proj /opt/stack/$p
         cd ..
@@ -255,7 +255,7 @@
     name: install_deps
     data: |
       apt-get update && apt-get --force-yes -y upgrade
-      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libvpx1 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client libjpeg-dev
+      apt-get --force-yes -y install bridge-utils conntrack dnsmasq-base dnsmasq-utils dstat ebtables fontconfig fontconfig-config fonts-dejavu-core fonts-liberation fping genisoimage gettext graphviz iputils-arping javascript-common kpartx libaio1 libasprintf-dev libblas3 libcairo2 libcdt5 libcgraph6 libcroco3 libdatrie1 libdevmapper-event1.02.1 libfontconfig1 libgd3 libgettextpo-dev libgettextpo0 libgfortran3 libgraphite2-3 libgvc6 libgvpr2 libharfbuzz0b libice6 libjbig0 libjs-jquery libjs-jquery-metadata libjs-jquery-tablesorter liblapack3 libltdl7 libmnl0 libnetfilter-conntrack3 libnspr4 libnss3 libnss3-nssdb libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libpathplan4 libpixman-1-0 librados2 librbd1 libsgutils2-2 libsm6 libsysfs2 libthai-data libthai0 libtiff5 libunistring0 libx86-1 libxaw7 libxcb-render0 libxcb-shm0 libxmu6 libxpm4 libxrender1 libxt6 libyaml-0-2 libyaml-dev lvm2 open-iscsi pm-utils python-libxml2 python-lxml python-m2crypto python-mysql.connector python-mysqldb qemu-utils sg3-utils sharutils socat sqlite3 sysfsutils unzip vbetool vlan watershed libguestfs0 erlang mysql-client libjpeg-dev
       #
       rm -fr /root/.cache/pip
       python2 -m pip install pytest-xdist pytest-html numpy extras docutils
@@ -925,7 +925,7 @@
       RALLY_POSTGRES: 1
     provider: ci4950
     vms:
-      - name: u1404_dsvm
+      - name: u1604_dsvm
         publish:
           - ["/opt/stack/logs", "devstack-logs"]
           - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
@@ -947,7 +947,7 @@
       RALLY_POSTGRES: 1
     provider: ci4950
     vms:
-      - name: u1404_dsvm
+      - name: u1604_dsvm
         publish:
           - ["/opt/stack/logs", "devstack-logs"]
           - ["/home/rally/rally/rally-cli-output-files", "cli-output-files"]
