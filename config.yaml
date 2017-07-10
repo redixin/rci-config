@@ -432,7 +432,7 @@
         apt-get update && apt-get --force-yes -y install postgresql
         sudo -i -u postgres createuser -s -d -r -l rally
         sudo -i -u postgres createdb --owner=rally rally
-        sed -i 's|#connection *=.*|connection=postgresql:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
+        sed -i 's|#connection *=.*|connection=postgresql-psycopg2:///rally?host=/var/run/postgresql|' /etc/rally/rally.conf
         $RCI_PYTHON -m pip install psycopg2
       fi
       if [ -n "${RALLY_MYSQL}" ]; then
@@ -444,7 +444,7 @@
         mysql -u root -pr00tme -e "create database rally;"
         mysql -u root -pr00tme -e "create user 'rally'@'localhost' identified by 'rally';"
         mysql -u root -pr00tme -e "grant all on rally.* to 'rally'@'localhost';"
-        sed -i 's|#connection *=.*|connection=mysql://rally:rally@localhost/rally|' /etc/rally/rally.conf
+        sed -i 's|#connection *=.*|connection=mysql-pymysql://rally:rally@localhost/rally|' /etc/rally/rally.conf
         $RCI_PYTHON -m pip install mysql-python
       fi
       sudo -u rally /usr/local/bin/rally-manage db recreate
