@@ -24,7 +24,7 @@
     cfg-url-template: https://review.openstack.org/gitweb?p={project}.git;a=blob_plain;f=.rally-ci.yaml;hb={commit}
     cr-url-template: https://review.openstack.org/#q,{commit},n,z
     commit-url-template: https://github.com/{project}/commit/{commit}
-    comment-job-template: "- {name} http://r-ci.tk/logs/{log_path}/ : {success} in {time}"
+    comment-job-template: "- {name} http://185.8.56.87/logs/{log_path}/ : {success} in {time}"
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
 
@@ -286,7 +286,7 @@
       git checkout master && git pull
       if [ -n "$GERRIT_REF" ]; then
           retry git fetch https://review.openstack.org/$PROJECT $GERRIT_REF
-          git checkout FETCH_HEAD && git rebase master
+          git checkout FETCH_HEAD # && git rebase master
       else
           git checkout $GERRIT_REFUPD_NEW
       fi
@@ -518,7 +518,7 @@
       do  
           n=$[$n+1]
           sleep 10
-          rally -v deployment check && exit 0
+          rally deployment check && exit 0
       done
       echo "Timeout waiting for cloud"
       exit 255
