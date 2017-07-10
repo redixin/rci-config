@@ -210,7 +210,9 @@
       cat /root/.ssh/authorized_keys >> /home/rally/.ssh/authorized_keys
       wait
       python2 -m pip install virtualenv &
+      python2 -m pip install tox &
       python3 -m pip install virtualenv &
+      python3 -m pip install tox &
       wait
 
 - script:
@@ -613,7 +615,7 @@
       . /var/repos/openstack/rally/.venv/bin/activate
       export RCI_KEEP_DB=1
       python -m pip freeze
-      python -m unittest discover -v -s tests/functional
+      tox -e cli
       uptime
 
 - script:
