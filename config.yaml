@@ -447,7 +447,7 @@
         mysql -u root -pr00tme -e "create user 'rally'@'localhost' identified by 'rally';"
         mysql -u root -pr00tme -e "grant all on rally.* to 'rally'@'localhost';"
         sed -i 's|#connection *=.*|connection=mysql+pymysql://rally:rally@localhost/rally|' /etc/rally/rally.conf
-        $RCI_PYTHON -m pip install mysql-python
+        $RCI_PYTHON -m pip install pymysql
       fi
       sudo -u rally /usr/local/bin/rally-manage db recreate
 
