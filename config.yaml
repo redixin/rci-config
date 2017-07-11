@@ -611,10 +611,8 @@
       source /var/repos/openstack-dev/devstack/openrc admin admin
       rally deployment create --name DEVSTACK --fromenv
       rally deployment check
-      cd rally
-      . /var/repos/openstack/rally/.venv/bin/activate
+      cd /var/repos/openstack/rally
       export RCI_KEEP_DB=1
-      python -m pip freeze
       tox -e cli
       uptime
 
