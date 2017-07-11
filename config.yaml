@@ -622,11 +622,8 @@
     name: unittests
     user: rally
     data: |
-      sudo ${RCI_PYTHON:-python} -m pip install -r /var/repos/$GERRIT_PROJECT/test-requirements.txt
-      sudo ${RCI_PYTHON:-python} -m pip install -r /var/repos/$GERRIT_PROJECT/requirements.txt
-      ${RCI_PYTHON:-python} -m pip freeze
       cd /var/repos/$GERRIT_PROJECT
-      $RCI_PYTHON -m unittest discover -v -s $RCI_UNITTESTS_DIR
+      tox -e ${TOX_ENV}
       uptime
 
 - script:
@@ -986,8 +983,7 @@
 - job:
     name: rally-pg-py27-unit
     env:
-      RCI_PYTHON: python2.7
-      RCI_UNITTESTS_DIR: tests/unit
+      TOX_ENV: py27
       RALLY_POSTGRES: 1
       RALLY_UNITTEST_DB_URL: "postgresql:///rally?host=/var/run/postgresql"
     provider: ci4950
@@ -1001,8 +997,7 @@
 - job:
     name: rally-mysql-py27-unit
     env:
-      RCI_PYTHON: python2.7
-      RCI_UNITTESTS_DIR: tests/unit
+      TOX_ENV: py27
       RALLY_MYSQL: 1
       RALLY_UNITTEST_DB_URL: "mysql://rally:rally@localhost/rally"
     provider: ci4950
