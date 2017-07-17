@@ -613,6 +613,8 @@
       rally deployment check
       cd /var/repos/openstack/rally
       export RCI_KEEP_DB=1
+      sudo pip install tox
+      sudo chown -R rally .
       tox -e cli
       uptime
 
@@ -621,6 +623,8 @@
     user: rally
     data: |
       cd /var/repos/$GERRIT_PROJECT
+      sudo pip install tox
+      sudo chown -R rally .
       tox -e ${TOX_ENV}
       uptime
 
