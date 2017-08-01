@@ -24,11 +24,11 @@
     cfg-url-template: https://review.openstack.org/gitweb?p={project}.git;a=blob_plain;f=.rally-ci.yaml;hb={commit}
     cr-url-template: https://review.openstack.org/#q,{commit},n,z
     commit-url-template: https://github.com/{project}/commit/{commit}
-    comment-job-template: "- {name} http://185.8.56.87/logs/{log_path}/ : {success} in {time}"
+    comment-job-template: "- {name} http://ci.xrally.xyz/logs/{log_path}/ : {success} in {time}"
     comment-header: |
       Build {succeeded} by RallyCI. Use `rally-ci recheck` to recheck
 
-      See status at: https://r-ci.tk/
+      See status at: http://ci.xrally.xyz/
     recheck-regexp: ^rally-ci recheck$
     env:
       GERRIT_PROJECT: change.project
