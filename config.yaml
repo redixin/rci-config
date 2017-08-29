@@ -302,11 +302,9 @@
       docker --version
       cd /var/repos/openstack/rally
       docker build -t rallyforge/rally .
-      mkdir /tmp/rv
-      sudo chown 65500 /tmp/rv
-      docker run -v /tmp/rv:/home/rally rallyforge/rally deployment create --name EX --file /opt/rally/samples/deployments/existing.json
-      docker run -v /tmp/rv:/home/rally rallyforge/rally deployment list
-      docker run -v /tmp/rv:/home/rally rallyforge/rally version
+      docker run -v rally_volume:/home/rally rallyforge/rally deployment create --name EX --file /opt/rally/samples/deployments/existing.json
+      docker run -v rally_volume:/home/rally rallyforge/rally deployment list
+      docker run -v rally_volume:/home/rally rallyforge/rally version
 
 - script:
     name: pull_ubuntu_1404
