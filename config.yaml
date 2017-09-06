@@ -303,7 +303,8 @@
       cd /var/repos/openstack/rally
       docker build -t rallyforge/rally .
       docker volume create --name rally_volume
-      docker run -v rally_volume:/home/rally rallyforge/rally deployment create --name EX --file /opt/rally/samples/deployments/existing.json
+      docker run -v rally_volume:/home/rally --entrypoint bash -c "echo '{}' > /home/rally/deployment.json"
+      docker run -v rally_volume:/home/rally rallyforge/rally deployment create --name EX --file /home/rally/deployment.json
       docker run -v rally_volume:/home/rally rallyforge/rally deployment list
       docker run -v rally_volume:/home/rally rallyforge/rally version
 
