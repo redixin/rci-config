@@ -971,6 +971,20 @@
           - gzip_ds_logs
 
 - job:
+    name: rally-pg-functional
+    env:
+      TOX_ENV: functional
+      RALLY_EXTRAS: postgres
+      RALLY_UNITTEST_DB_URL: "postgresql:///rally?host=/var/run/postgresql"
+    provider: ci4950
+    vms:
+      - name: u1604_dsvm
+        scripts:
+          - git_checkout
+          - install_rally
+          - unittests
+
+- job:
     name: docker-check
     provider: ci4950
     vms:
@@ -1076,9 +1090,8 @@
       - mos-7.0
     jobs:
       - docker-check
-      - rally-dsvm-pg-py27-cli
-      - rally-dsvm-pg-py34-cli
       - mos-8.0
       - mos-8.0-ssl-v3
       - rally-pg-py27-unit
       - rally-mysql-py27-unit
+      - rally-pg-functional
